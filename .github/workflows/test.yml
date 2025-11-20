@@ -46,6 +46,16 @@ jobs:
           --health-timeout=5s
           --health-retries=8
 
+      app:
+        image: nandanksingh/module11_test_calculation_model:m11
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd="curl --fail http://localhost:8000/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -67,6 +77,7 @@ jobs:
       - name: Run Tests (Coverage ≥ 90%)
         env:
           DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/calc_app_db
+          E2E_BASE_URL: http://app:8000
         run: |
           source venv/bin/activate
           pytest --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings
