@@ -1,0 +1,129 @@
+# ----------------------------------------------------------
+# Author: Nandan Kumar
+# Date: 11/09/2025 
+# FastAPI Modular Calculator CI/CD Pipeline
+# File: .github/workflows/test.yml
+# ----------------------------------------------------------
+# Description:
+# GitHub Actions pipeline:
+#   1. Run tests (coverage ≥ 90%)
+#   2. Run Trivy security scan
+#   3. Build + push verified image to Docker Hub
+# ----------------------------------------------------------
+
+name: Assignment 11 – Calculation Model CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+
+  # --------------------------------------------------------
+  # 1. TEST JOB
+  # --------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ps_user
+          POSTGRES_PASSWORD: ps_password
+          POSTGRES_DB: calc_app_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ps_user"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=8
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        env:
+          DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/calc_app_db
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+
+      - name: Run Tests (Coverage ≥ 90%)
+        env:
+          DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/calc_app_db
+        run: |
+          source venv/bin/activate
+          pytest --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+  # --------------------------------------------------------
+  # 2. SECURITY JOB
+  # --------------------------------------------------------
+  security:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image for scanning
+        run: docker build -t nandanksingh/module11_test_calculation_model:M11 .
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nandanksingh/module11_test_calculation_model:M11
+          format: table
+          exit-code: 0
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  # --------------------------------------------------------
+  # 3. DEPLOY JOB
+  # --------------------------------------------------------
+  deploy:
+    needs: security
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Hub Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build + Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            nandanksingh/module11_test_calculation_model:M11
+            nandanksingh/module11_test_calculation_model:${{ github.sha }}
+
+      - name: Verify Push
+        run: docker pull nandanksingh/module11_test_calculation_model:M11

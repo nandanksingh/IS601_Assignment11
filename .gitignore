@@ -1,0 +1,46 @@
+# ----------------------------------------------------------
+# Author: Nandan Kumar
+# Date: 11/05/2025
+# Assignment-11: Secure User Model + DB + Docker
+# File: .gitignore
+# ----------------------------------------------------------
+# Description:
+# Ignore Python, Docker, test, and environment artifacts
+# to keep repository clean and consistent.
+# ----------------------------------------------------------
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Coverage & Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.cache/
+
+# Logs & Reports
+*.log
+*.out
+*.pid
+
+# Databases
+*.db
+*.sqlite3
+postgres_data/
+pgadmin_data/
+
+# Docker
+docker-compose.override.yml
+*.local.yml
+
+# IDE / OS
+.DS_Store
+.idea/
+
+# Node & Playwright
+node_modules/
+playwright-report/

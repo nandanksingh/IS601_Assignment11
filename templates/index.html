@@ -1,0 +1,275 @@
+<!-- ----------------------------------------------------------
+ Author: Nandan Kumar
+ Date: 11/16/2025
+ Assignment-11: Calculation Model + UI Enhancement
+ File: templates/index.html
+ ----------------------------------------------------------
+ Description:
+ Modern, polished web-based calculator UI that communicates
+ with the FastAPI backend using the POST /calc/compute route.
+ Includes animated gradient background, glass-style card,
+ accessible inputs, meaningful error messages, and is
+ fully compatible with Playwright E2E tests.
+
+ Notes:
+ - Button labels MUST remain "Add", "Subtract", "Multiply", "Divide"
+   because Playwright's selectors depend on these exact strings.
+ - The JS function must send lowercase operation types
+   (add/subtract/multiply/divide) to match API behavior.
+ - The result box must output ONLY the numeric answer because
+   Playwright validates response using substring match.
+ ---------------------------------------------------------- -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>FastAPI Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    /* --------------------------------------------------------
+       GLOBAL PAGE STYLING
+       Full-screen animated gradient background to provide
+       a modern and visually appealing look.
+       -------------------------------------------------------- */
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+
+      /* Animated ocean-blue gradient */
+      background: linear-gradient(135deg, #0a4d7a, #0e6fa8, #13a7c7, #17c7e8);
+      background-size: 200% 200%;
+      animation: oceanShift 8s ease infinite;
+
+      color: #ffffff;
+    }
+
+    /* Smooth movement animation for background */
+    @keyframes oceanShift {
+      0% {
+        background-position: 0% 50%;
+      }
+
+      50% {
+        background-position: 100% 50%;
+      }
+
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    /* --------------------------------------------------------
+       HEADERS
+       Large clean title with subtle shadow depth.
+       -------------------------------------------------------- */
+    h1 {
+      margin-bottom: 20px;
+      font-size: 2.4rem;
+      font-weight: 700;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    /* --------------------------------------------------------
+       CALCULATOR CARD (Glassmorphism design)
+       Provides a frosted transparent style with inner glow.
+       -------------------------------------------------------- */
+    .calculator {
+      background: rgba(255, 255, 255, 0.18);
+      /* Transparent 'glass' layer */
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 35px 45px;
+      width: 100%;
+      max-width: 420px;
+
+      box-shadow:
+        0 10px 25px rgba(0, 0, 0, 0.25),
+        inset 0 0 20px rgba(255, 255, 255, 0.15);
+
+      text-align: center;
+      animation: fadeIn 1s ease;
+    }
+
+    /* Fade-in effect for the main card */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(15px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* --------------------------------------------------------
+       USER INPUT FIELDS
+       Simple, centered, rounded fields with focus glow.
+       -------------------------------------------------------- */
+    input {
+      margin: 10px;
+      width: 170px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.45);
+      font-size: 16px;
+      text-align: center;
+      outline: none;
+      transition: 0.3s;
+    }
+
+    input:focus {
+      border-color: #ffffff;
+      box-shadow: 0 0 6px #fff;
+    }
+
+    /* --------------------------------------------------------
+       CALCULATOR BUTTON DESIGN
+       Each button has its own identifying color. Buttons grow
+       slightly on hover for a more interactive feel.
+       -------------------------------------------------------- */
+    button {
+      margin: 8px;
+      padding: 10px 20px;
+      font-size: 15px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      color: white;
+      font-weight: bold;
+      transition: 0.3s ease;
+    }
+
+    /* Consistent color theme per operation */
+    #add {
+      background: #28d17c;
+    }
+
+    /* Green */
+    #subtract {
+      background: #ffb74d;
+    }
+
+    /* Amber */
+    #multiply {
+      background: #7e57c2;
+    }
+
+    /* Purple */
+    #divide {
+      background: #ef5350;
+    }
+
+    /* Red */
+
+    button:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+    }
+
+    /* --------------------------------------------------------
+       RESULT DISPLAY BOX
+       Shows responses from backend. Must remain clean and free
+       of prefixes like "Result:" because Playwright expects
+       exact numeric match.
+       -------------------------------------------------------- */
+    #result {
+      margin-top: 20px;
+      padding: 12px;
+      min-height: 28px;
+      font-size: 20px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.3);
+      color: #fff;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>FastAPI Calculator</h1>
+
+  <div class="calculator">
+    <h2>Enter Two Numbers</h2>
+
+    <!-- Input fields MUST keep IDs #a and #b for Playwright testing -->
+    <input type="text" id="a" placeholder="First number">
+    <input type="text" id="b" placeholder="Second number"><br>
+
+    <!-- Button text must remain exact for Playwright -->
+    <button id="add" onclick="calculate('add')">Add</button>
+    <button id="subtract" onclick="calculate('subtract')">Subtract</button>
+    <button id="multiply" onclick="calculate('multiply')">Multiply</button>
+    <button id="divide" onclick="calculate('divide')">Divide</button>
+
+    <!-- Output box where results or errors appear -->
+    <div id="result"></div>
+  </div>
+
+  <script>
+    /**
+     * Core function responsible for sending calculation requests
+     * to the FastAPI backend at POST /calc/compute.
+     *
+     * Operation names are lowercase to match API:
+     *   add, subtract, multiply, divide
+     *
+     * Result is placed directly as text into #result.
+     * Playwright expects EXACT numeric content (no prefix).
+     */
+    async function calculate(operation) {
+      const a = document.getElementById("a").value.trim();
+      const b = document.getElementById("b").value.trim();
+      const resultBox = document.getElementById("result");
+
+      // Simple client-side validation
+      if (!a || !b) {
+        resultBox.innerText = "Error: Missing input values.";
+        return;
+      }
+
+      try {
+        const response = await fetch("/calc/compute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: operation,        // must be lowercase
+            a: parseFloat(a),
+            b: parseFloat(b)
+          })
+        });
+
+        // Parse server response
+        const data = await response.json();
+
+        // Success case
+        if (response.ok && data.result !== undefined) {
+          resultBox.innerText = data.result; // MUST be only number
+        }
+        else {
+          // Server returned a validation or computation error
+          resultBox.innerText = "Error: " + (data.detail || "Invalid input");
+        }
+
+      } catch (err) {
+        // Network / backend not reachable
+        resultBox.innerText = "Server error";
+      }
+    }
+  </script>
+
+</body>
+
+</html>
