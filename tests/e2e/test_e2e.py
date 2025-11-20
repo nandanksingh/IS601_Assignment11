@@ -24,7 +24,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 # ----------------------------------------------------------
 # Base URL (local or overridden in CI/CD)
 # ----------------------------------------------------------
-BASE_URL = os.getenv("E2E_BASE_URL", "http://127.0.0.1:8000")
+BASE_URL = os.getenv("E2E_BASE_URL", "http://app:8000")
 
 
 # ----------------------------------------------------------
