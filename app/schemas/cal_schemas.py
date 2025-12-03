@@ -1,64 +1,64 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
 # Date: 11/17/2025
-# Assignment-11: Calculation Pydantic Schemas 
+# Assignment-11: Calculator API Schemas (Final)
 # File: app/schemas/cal_schemas.py
 # ----------------------------------------------------------
+# Description:
+#   Schemas required by professor test suite.
+#
+#   MUST support:
+#      • /calc/compute          → CalculationCompute
+#      • Only returns { result }
+#      • No user_id required for compute route
+#
+#   Additional schemas kept minimal to satisfy:
+#      • test_cal_model.py
+#      • test_calculation_factory.py
+# ----------------------------------------------------------
 
-from pydantic import BaseModel, field_validator
-from typing import Optional
+from pydantic import BaseModel, Field
 
-VALID_OPERATIONS = {"add", "subtract", "multiply", "divide"}
 
+# ==========================================================
+# 1) Schema used by POST /calc/compute
+# ==========================================================
+class CalculationCompute(BaseModel):
+    type: str = Field(..., description="Operation type: add/subtract/multiply/divide")
+    a: float = Field(..., description="Operand A")
+    b: float = Field(..., description="Operand B")
+
+
+# ==========================================================
+# 2) Response schema returned by API
+# ==========================================================
+class CalculationRead(BaseModel):
+    result: float
+
+
+# ==========================================================
+# 3) Schema used INTERNALLY in tests (DB creation)
+# ----------------------------------------------------------
 
 class CalculationCreate(BaseModel):
     type: str
     a: float
     b: float
+    result: float
+    user_id: int | None = None
 
-    # Normalize + validate type
-    @field_validator("type")
-    def validate_type(cls, v: str):
-        normalized = v.strip().lower()
-        if normalized not in VALID_OPERATIONS:
-            raise ValueError(f"Invalid operation: {v}")
-        return normalized
-
-    # Validate numeric fields
-    @field_validator("a", "b")
-    def validate_numeric(cls, v):
-        if not isinstance(v, (int, float)):
-            raise ValueError("Inputs must be numeric.")
-        return float(v)
-
-    # Prevent divide-by-zero
-    @field_validator("b")
-    def check_div_zero(cls, v, info):
-        op = info.data.get("type")
-        if op == "divide" and v == 0:
-            raise ValueError("Cannot divide by zero.")
-        return v
-
-    # REQUIRED BY TESTS
-    def compute_result(self) -> float:
-        if self.type == "add":
-            return float(self.a + self.b)
-        if self.type == "subtract":
-            return float(self.a - self.b)
-        if self.type == "multiply":
-            return float(self.a * self.b)
-        if self.type == "divide":
-            return float(self.a / self.b)
-        raise ValueError("Invalid operation")
+    model_config = {"from_attributes": True}
 
 
-class CalculationRead(BaseModel):
+# ==========================================================
+# 4) Schema used for ORM → Schema conversion
+# ----------------------------------------------------------
+class CalculationDBRead(BaseModel):
     id: int
     type: str
     a: float
     b: float
     result: float
-    user_id: Optional[int] = None
+    user_id: int | None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

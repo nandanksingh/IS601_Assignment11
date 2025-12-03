@@ -1,20 +1,17 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/15/2025
+# Date: 11/19/2025
 # Assignment-11: User Schemas 
 # File: app/schemas/user_schema.py
 # ----------------------------------------------------------
 # Description:
 # Pydantic v2 schemas for:
-#   • UserCreate (registration)
-#   • UserLogin
-#   • UserRead (ORM → API safe)
-#   • UserResponse (public user API)
-#   • JWT token models
+#   • User registration
+#   • User login
+#   • User read/response formatting
+#   • JWT token structures
 #
-# IMPORTANT FIX:
-#   first_name / last_name now allow empty string ("")
-#   using min_length=0 — required to pass test_user_to_read_schema.
+# Fully compatible with Assignment-11 test cases.
 # ----------------------------------------------------------
 
 from datetime import datetime
@@ -26,28 +23,34 @@ from .base import UserBase, PasswordMixin
 
 # ----------------------------------------------------------
 # User Registration Schema
+# Combines:
+#   • first_name, last_name, username, email  (UserBase)
+#   • password rules                           (PasswordMixin)
 # ----------------------------------------------------------
 class UserCreate(UserBase, PasswordMixin):
+    """Schema for registering a new user."""
     pass
 
 
 # ----------------------------------------------------------
-# Login Schema
+# User Login Schema
+# username here may be username OR email
 # ----------------------------------------------------------
 class UserLogin(PasswordMixin):
-    username: str = Field(..., min_length=3, max_length=120)
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        description="Username or email used to sign in"
+    )
 
 
 # ----------------------------------------------------------
-# ORM → API Read Schema
+# ORM → Pydantic Read Schema
+# Includes ID + timestamps
 # ----------------------------------------------------------
 class UserRead(UserBase):
     id: int
-    # FIX: allow "" (required by test_user_to_read_schema)
-    first_name: str = Field("", min_length=0)
-    last_name: str = Field("", min_length=0)
-
-    is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -55,12 +58,14 @@ class UserRead(UserBase):
 
 
 # ----------------------------------------------------------
-# Public API User Response
+# Minimal API-Safe User Response
+# Tests expect:
+#   id, username, email, is_active, created_at, updated_at
 # ----------------------------------------------------------
 class UserResponse(BaseModel):
     id: int
-    first_name: str = Field("", min_length=0)
-    last_name: str = Field("", min_length=0)
+    first_name: str
+    last_name: str
     username: str
     email: EmailStr
     is_active: bool
@@ -71,7 +76,7 @@ class UserResponse(BaseModel):
 
 
 # ----------------------------------------------------------
-# JWT Token Model
+# JWT Token Response
 # ----------------------------------------------------------
 class Token(BaseModel):
     access_token: str
@@ -81,6 +86,7 @@ class Token(BaseModel):
 
 # ----------------------------------------------------------
 # JWT Token Payload
+# Tests expect TokenData.sub to be optional
 # ----------------------------------------------------------
 class TokenData(BaseModel):
     sub: Optional[str] = None

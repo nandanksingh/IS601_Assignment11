@@ -5,66 +5,40 @@
 # File: app/routers/auth.py
 # ----------------------------------------------------------
 # Description:
-# Minimal authentication router for Module-11.
-# Supports:
-#   • User registration
-#   • User login (username or email)
-#   • JWT token generation
-#   • /auth/me endpoint for authenticated user info
-#
-# Fully compatible with:
-#   • PyJWT
-#   • SQLAlchemy ORM
-#   • Pydantic v2
-#   • Password hashing utilities
-#   • Assignment-11 test expectations
+# Handles user registration, login, password hashing,
+# JWT token generation, and authenticated user retrieval.
 # ----------------------------------------------------------
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.security import (
-    hash_password,
-    verify_password,
-    create_access_token,
-)
-from app.auth.dependencies import get_current_user, get_db
+from app.database.dbase import get_session
 from app.schemas.user_schema import UserCreate, UserLogin, UserResponse
 from app.models.user_model import User
+from app.auth.security import hash_password, verify_password, create_access_token
+from app.auth.dependencies import get_current_user
 
-router = APIRouter(tags=["Authentication"])
+router = APIRouter()
 
 
 # ----------------------------------------------------------
 # POST /auth/register
 # ----------------------------------------------------------
-@router.post("/register", response_model=UserResponse)  # pragma: no cover
-def register_user(payload: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user. Enforces unique username + email."""
+@router.post("/register", response_model=UserResponse)   # pragma: no cover
+def register_user(payload: UserCreate, db: Session = Depends(get_session)):
+    """Register a new user (username + email must be unique)."""
 
-    # Username must be unique
     if db.query(User).filter(User.username == payload.username).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists",
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Username already exists")
 
-    # Email must be unique
     if db.query(User).filter(User.email == payload.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
 
-    # Create user object
     user = User(
         username=payload.username,
         email=payload.email,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
         password_hash=hash_password(payload.password),
     )
-
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -75,11 +49,10 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)):
 # ----------------------------------------------------------
 # POST /auth/login
 # ----------------------------------------------------------
-@router.post("/login")  # pragma: no cover
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate a user and return JWT."""
+@router.post("/login")   # pragma: no cover
+def login(credentials: UserLogin, db: Session = Depends(get_session)):
+    """Authenticate user & return JWT."""
 
-    # User can login with username OR email
     user = (
         db.query(User)
         .filter(
@@ -89,14 +62,12 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         .first()
     )
 
-    # Invalid credentials
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
+            detail="Invalid username or password"
         )
 
-    # Create access token
     token = create_access_token({"sub": str(user.id)})
 
     return {"access_token": token, "token_type": "bearer"}
@@ -105,7 +76,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 # ----------------------------------------------------------
 # GET /auth/me
 # ----------------------------------------------------------
-@router.get("/me", response_model=UserResponse)  # pragma: no cover
+@router.get("/me", response_model=UserResponse)   # pragma: no cover
 def me(current_user: User = Depends(get_current_user)):
-    """Return details of authenticated user."""
+    """Return authenticated user."""
     return current_user.to_read_schema()

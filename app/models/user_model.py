@@ -1,109 +1,121 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/16/2025
-# Assignment-11: User SQLAlchemy Model 
+# Date: 11/19/2025
+# Assignment-11: User SQLAlchemy Model (Final Version)
 # File: app/models/user_model.py
 # ----------------------------------------------------------
 # Description:
-# Defines the User ORM model for authentication, ownership
-# of calculations, and serialization into Pydantic schemas.
-# Fully aligned with Assignment-11 test requirements:
-#   • Supports deterministic id=1 seeding
-#   • Converts None → "" for Pydantic (tests expect this)
-#   • Secure password hashing + verification
-#   • Test-safe __repr__ implementation
+# Defines the SQLAlchemy ORM model for User accounts.
+# Supports:
+#   • Unique username & email
+#   • Secure password hashing and verification
+#   • Required fields: first_name, last_name, is_active
+#   • Timestamp tracking (created_at, updated_at)
+#   • Relationship to Calculation model
+#   • ORM → Pydantic conversion (safe, complete, test-aligned)
+#   • Fully compatible with SQLAlchemy 2.x and Pydantic v2
 # ----------------------------------------------------------
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    Boolean,
+    func,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from app.database.dbase import Base
-from app.schemas.user_schema import UserRead, UserResponse
 from app.auth.security import hash_password, verify_password
+from app.schemas.user_schema import UserResponse
 
 
 class User(Base):
+    """Represents an authenticated user in the system."""
+
     __tablename__ = "users"
 
     # ------------------------------------------------------
-    # Columns
+    # Core Columns
     # ------------------------------------------------------
     id = Column(Integer, primary_key=True, index=True)
 
-    # Nullable names → tests expect empty string fallback
-    first_name = Column(String(120), nullable=True)
-    last_name = Column(String(120), nullable=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
 
-    username = Column(String(120), unique=True, index=True, nullable=False)
-    email = Column(String(255), unique=True, index=True, nullable=False)
+    # Required fields expected by tests
+    first_name = Column(String(50), nullable=False, default="Unknown")
+    last_name = Column(String(50), nullable=False, default="Unknown")
+    is_active = Column(Boolean, nullable=False, default=True)
 
+    # Secure password storage
     password_hash = Column(String(255), nullable=False)
 
-    is_active = Column(Boolean, default=True, nullable=False)
+    # Timestamps
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True)
-
-    # Relationship to Calculation model
-    calculations = relationship("Calculation", back_populates="user")
+    # Unique constraints
+    __table_args__ = (
+        UniqueConstraint("username", name="uq_user_username"),
+        UniqueConstraint("email", name="uq_user_email"),
+    )
 
     # ------------------------------------------------------
-    # Password Handling
+    # Relationship: user.calculations
+    # ------------------------------------------------------
+    calculations = relationship(
+        "Calculation",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    # ------------------------------------------------------
+    # Password Helpers
     # ------------------------------------------------------
     def set_password(self, raw_password: str):
-        """Hash and store a user's password."""
+        """Hash and store the user's password."""
+        if not raw_password or not isinstance(raw_password, str):
+            raise ValueError("Password must be a non-empty string")
         self.password_hash = hash_password(raw_password)
 
     def verify_password(self, raw_password: str) -> bool:
-        """Validate a raw password using stored hash."""
-        return verify_password(raw_password, self.password_hash)
+        """Safely verify password correctness."""
+        try:
+            return verify_password(raw_password, self.password_hash)
+        except Exception:
+            return False
 
     # ------------------------------------------------------
-    # Schema Conversions (must match test expectations)
+    # ORM → Pydantic Conversion (Test-Aligned)
     # ------------------------------------------------------
-    def to_read_schema(self) -> UserRead:
+    def to_read_schema(self) -> UserResponse:
         """
-        Convert ORM object → UserRead Pydantic schema.
-        Tests require that None becomes "" for names.
-        """
-        return UserRead.model_validate({
-            "id": self.id,
-            "first_name": self.first_name or "",
-            "last_name": self.last_name or "",
-            "username": self.username,
-            "email": self.email,
-            "is_active": self.is_active,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        })
-
-    def to_response_schema(self) -> UserResponse:
-        """
-        Convert ORM → API response schema.
-        Same None → "" rule applies here.
+        Convert ORM → Pydantic UserResponse.
+        Tests require ALL fields to be explicitly provided.
         """
         return UserResponse.model_validate({
             "id": self.id,
-            "first_name": self.first_name or "",
-            "last_name": self.last_name or "",
             "username": self.username,
             "email": self.email,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
             "is_active": self.is_active,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         })
 
     # ------------------------------------------------------
-    # __repr__
+    # Safe Debug Representation
     # ------------------------------------------------------
     def __repr__(self):
-        """
-        Test-safe repr. Even if fields are missing during
-        partial instantiation (e.g., factory tests), repr
-        should not raise exceptions.
-        """
         try:
-            return f"<User id={self.id} username='{self.username}' email='{self.email}'>"
+            return (
+                f"User(id={self.id}, username='{self.username}', "
+                f"email='{self.email}')"
+            )
         except Exception:
-            return f"<User id={self.id}>"
+            return f"User(id={getattr(self, 'id', None)})"

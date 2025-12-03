@@ -1,24 +1,18 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/17/2025
+# Date: 11/19/2025
 # Assignment-11: Health Check Router
 # File: app/routers/health.py
 # ----------------------------------------------------------
 # Description:
-# Provides a minimal health check endpoint used by:
-#   • Docker container HEALTHCHECK
-#   • GitHub Actions CI pipeline
-#   • Local debugging and uptime monitoring
-#
-# Must return a simple JSON object:
-#       {"status": "healthy"}
+# Minimal health endpoint for Docker and CI/CD.
 # ----------------------------------------------------------
 
 from fastapi import APIRouter
 
 router = APIRouter()
 
-@router.get("/health", tags=["Health"])
+@router.get("/health")
 def health():
-    """Simple endpoint confirming that the API is running."""
     return {"status": "healthy"}
+

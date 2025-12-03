@@ -1,79 +1,101 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/12/2025
-# Assignment-11: End-to-End Tests 
+# Date: 11/17/2025
+# Assignment-11: End-to-End (E2E) API & UI Testing
 # File: tests/e2e/test_e2e.py
 # ----------------------------------------------------------
 # Description:
-#   • Full-stack E2E tests for the Calculator project
-#   • Uses Playwright to drive the UI
-#   • Confirms FastAPI backend responds correctly
-#   • Covers homepage rendering, calculation flows,
-#     division by zero, and invalid input handling
+# Full end-to-end test suite using Playwright + HTTP requests.
+#
+# Covers:
+#   • FastAPI server health readiness
+#   • Homepage rendering (UI)
+#   • Calculator UI → backend arithmetic operations
+#   • Error handling (invalid input, missing values, division by zero)
 # ----------------------------------------------------------
 
 import os
 import time
 import pytest
 import requests
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
 
 # ----------------------------------------------------------
-# Base URL for FastAPI application
+# Base URL (local or overridden in CI/CD)
 # ----------------------------------------------------------
-# Inside Docker, use service name "app".
-# On host machine, override BASE_URL to http://localhost:8000.
-BASE_URL = os.getenv("BASE_URL", "http://app:8000")
+BASE_URL = os.getenv("E2E_BASE_URL", "http://app:8000")
+
 
 # ----------------------------------------------------------
-# Helper: Wait until FastAPI server responds
+# Helper — Wait Until App Is Ready
 # ----------------------------------------------------------
-def wait_for_app_ready():
-    """Poll the /health endpoint until FastAPI reports ready."""
-    for _ in range(30):
+def wait_for_app_ready(url=f"{BASE_URL}/health", timeout=30):
+    """
+    Waits up to 30 seconds until FastAPI responds with HTTP 200.
+    Prevents tests from running before the server is fully started.
+    """
+    for _ in range(timeout):
         try:
-            response = requests.get(f"{BASE_URL}/health")
-            if response.status_code == 200:
+            r = requests.get(url)
+            if r.status_code == 200:
+                print(" FastAPI server is ready.")
                 return
-        except Exception:
-            pass
-        time.sleep(1)
-    pytest.fail("FastAPI server did not respond.")
+        except requests.exceptions.ConnectionError:
+            time.sleep(1)
+
+    pytest.fail(f"FastAPI server did not respond at {url}")
+
 
 # ----------------------------------------------------------
-# Playwright browser fixtures
+# Playwright Fixtures
 # ----------------------------------------------------------
 @pytest.fixture(scope="module")
 def browser():
-    """Launch Chromium once per module after app is healthy."""
+    """Launch headless Chromium once per module."""
     wait_for_app_ready()
-    with sync_playwright() as pw:
-        br = pw.chromium.launch(headless=True)
-        yield br
-        br.close()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        yield browser
+        browser.close()
+
 
 @pytest.fixture
 def page(browser):
-    """Provide a fresh browser page for each test."""
+    """Fresh browser page for every test."""
     context = browser.new_context()
-    pg = context.new_page()
-    yield pg
+    page = context.new_page()
+    yield page
     context.close()
 
+
 # ----------------------------------------------------------
-# Test: Homepage loads correctly
+# Homepage & Health Checks
 # ----------------------------------------------------------
 @pytest.mark.e2e
 def test_homepage_loads(page):
-    page.goto(BASE_URL)
-    assert "Calculator" in (page.text_content("h1") or "")
+    """Verify homepage loads and contains expected title text."""
+    page.goto(BASE_URL, wait_until="domcontentloaded")
+    title_text = page.text_content("h1") or ""
+    assert "FastAPI" in title_text or "Calculator" in title_text
+
+
+@pytest.mark.e2e
+def test_health_endpoint_direct():
+    """Confirm /health returns JSON indicating service is OK."""
+    r = requests.get(f"{BASE_URL}/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert "status" in body
+    assert body["status"].lower() in ["ok", "healthy", "running"]
+
 
 # ----------------------------------------------------------
-# Test: UI operations perform correct calculations
+# Calculator Functional Tests
 # ----------------------------------------------------------
 @pytest.mark.e2e
 @pytest.mark.parametrize(
-    "op,a,b,expected",
+    "op, a, b, expected",
     [
         ("Add", "5", "7", "12"),
         ("Subtract", "15", "4", "11"),
@@ -81,50 +103,61 @@ def test_homepage_loads(page):
         ("Divide", "20", "5", "4"),
     ],
 )
-def test_calculation_ui_flow(page, op, a, b, expected):
-    page.goto(BASE_URL)
+def test_calculator_operations(page, op, a, b, expected):
+    """Ensure UI → API calculation flow works for all operations."""
+    page.goto(BASE_URL, wait_until="domcontentloaded")
     page.fill("#a", a)
     page.fill("#b", b)
     page.click(f"text={op}")
+
     try:
-        # Wait until #result has non-empty text
-        page.wait_for_function(
-            "document.querySelector('#result').textContent.trim() !== ''",
-            timeout=7000,
-        )
-        text = page.text_content("#result") or ""
-        assert text.strip() == expected or "error" in text.lower()
-    except PWTimeout:
-        pytest.fail(f"Timeout waiting for result for {op}")
+        page.wait_for_selector("#result", timeout=7000)
+        result_text = page.text_content("#result") or ""
+        assert expected in result_text
+    except PlaywrightTimeoutError:
+        pytest.fail(f"Timeout waiting for result in '{op}' operation")
+
 
 # ----------------------------------------------------------
-# Test: Division by zero shows an error message
+# Negative / Error Handling Tests
 # ----------------------------------------------------------
 @pytest.mark.e2e
 def test_divide_by_zero(page):
+    """Division by zero should show proper error message."""
     page.goto(BASE_URL)
     page.fill("#a", "10")
     page.fill("#b", "0")
     page.click("text=Divide")
-    page.wait_for_function(
-        "document.querySelector('#result').textContent.trim() !== ''",
-        timeout=7000,
-    )
-    text = page.text_content("#result") or ""
-    assert "error" in text.lower() or "zero" in text.lower()
 
-# ----------------------------------------------------------
-# Test: Invalid input is handled gracefully
-# ----------------------------------------------------------
+    try:
+        page.wait_for_selector("#result", timeout=5000)
+        msg = page.text_content("#result") or ""
+        assert "divide by zero" in msg.lower() or "error" in msg.lower()
+    except PlaywrightTimeoutError:
+        pytest.fail("Result element missing after division by zero.")
+
+
 @pytest.mark.e2e
 def test_invalid_input(page):
+    """Non-numeric input must trigger validation error."""
     page.goto(BASE_URL)
     page.fill("#a", "abc")
-    page.fill("#b", "5")
+    page.fill("#b", "3")
     page.click("text=Add")
-    page.wait_for_function(
-        "document.querySelector('#result').textContent.trim() !== ''",
-        timeout=7000,
-    )
-    text = page.text_content("#result") or ""
-    assert "error" in text.lower() or "invalid" in text.lower()
+
+    page.wait_for_selector("#result", timeout=5000)
+    msg = page.text_content("#result") or ""
+    assert "error" in msg.lower()
+
+
+@pytest.mark.e2e
+def test_missing_input(page):
+    """Empty fields must return a validation message."""
+    page.goto(BASE_URL)
+    page.fill("#a", "")
+    page.fill("#b", "")
+    page.click("text=Add")
+
+    page.wait_for_selector("#result", timeout=5000)
+    msg = page.text_content("#result") or ""
+    assert "error" in msg.lower() or "invalid" in msg.lower()

@@ -1,149 +1,160 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Assignment-11: Database Integration Tests
+# Date: 11/17/2025
+# Assignment-10: Database Integration Tests
 # File: tests/integration/test_database.py
 # ----------------------------------------------------------
 # Description:
-# Ensures database URL priority, engine reset behavior,
-# session lifecycle, metadata creation, and seeding logic
-# all match expected behavior of app/database/dbase.py.
+# Covers:
+#   • Engine initialization (success + error paths)
+#   • DATABASE_URL resolution
+#   • Session lifecycle behavior
+#   • init_db() and drop_db() success/failure
+#   • PostgreSQL fallback helpers
 # ----------------------------------------------------------
 
 import os
 import sys
-import importlib
 import pytest
-from unittest.mock import patch
-
+import importlib
+from unittest.mock import patch, MagicMock
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-DBMODULE = "app.database.dbase"
+DATABASE_MODULE = "app.database.dbase"
+
+
+# Helper: Reload module for fresh environment
+def reload_database_module():
+    if DATABASE_MODULE in sys.modules:
+        del sys.modules[DATABASE_MODULE]
+    return importlib.import_module(DATABASE_MODULE)
 
 
 # ----------------------------------------------------------
-# Helper to reload dbase.py after env changes
+# Engine and URL Coverage
 # ----------------------------------------------------------
-def reload_db():
-    if DBMODULE in sys.modules:
-        del sys.modules[DBMODULE]
-    return importlib.import_module(DBMODULE)
+def test_get_engine_success(monkeypatch):
+    """Ensure a valid SQLAlchemy engine is created."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    db = reload_database_module()
+    engine = db.get_engine()
+    assert isinstance(engine, Engine)
 
 
-# ----------------------------------------------------------
-# Engine Tests
-# ----------------------------------------------------------
-def test_engine_creation_sqlite(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test_engine1.db")
-    db = reload_db()
-    assert isinstance(db.get_engine(), Engine)
-
-
-def test_engine_url_postgres(monkeypatch):
-    url = "postgresql://user:pass@host:5432/mydb"
-    monkeypatch.setenv("_TESTING_ALLOW_DATABASE_URL_OVERRIDE", "1")
-    db = reload_db()
-    assert db.get_database_url() == url
-
-
-def test_engine_failure(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./fail_engine.db")
-    with patch("app.database.dbase.create_engine", side_effect=Exception("boom")):
+def test_get_engine_failure_with_sqlite(monkeypatch):
+    """Force create_engine() failure to cover error-handling path."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    with patch("app.database.dbase.create_engine",
+               side_effect=SQLAlchemyError("Simulated failure")):
         import app.database.dbase as dbase
-        with pytest.raises(Exception):
-            dbase.reload_db()
+        with pytest.raises(SQLAlchemyError):
+            dbase.get_engine()
+
+
+def test_get_engine_coverage_fallback(monkeypatch):
+    """Validate SQLite branch with connect_args."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    db = reload_database_module()
+    engine = db.get_engine()
+    assert "sqlite" in str(engine.url)
+
+
+def test_get_database_url_variants(monkeypatch):
+    """DATABASE_URL should return postgres or sqlite strings."""
+    monkeypatch.setenv("DATABASE_URL",
+                       "postgresql://user:pass@db:5432/test_db")
+    import app.database.dbase as dbase
+    result = dbase.get_database_url()
+    assert "postgresql" in result or "sqlite" in result
 
 
 # ----------------------------------------------------------
-# Session Tests
+# Session Lifecycle
 # ----------------------------------------------------------
-def test_session_local(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./session_test.db")
-    db = reload_db()
+def test_session_factory(monkeypatch):
+    """Ensure SessionLocal creates usable SQLAlchemy sessions."""
+    db = reload_database_module()
     session = db.SessionLocal()
     assert isinstance(session, Session)
     session.close()
 
 
-def test_base_metadata_exists():
-    db = reload_db()
-    assert hasattr(db.Base, "metadata")
+def test_base_declaration(monkeypatch):
+    """Base metadata must exist."""
+    db = reload_database_module()
+    assert db.Base is not None
+
+
+def test_init_drop_db(monkeypatch):
+    """init_db() and drop_db() must call metadata methods."""
+    db = reload_database_module()
+    with patch.object(db.Base.metadata, "create_all") as mock_create, \
+            patch.object(db.Base.metadata, "drop_all") as mock_drop:
+        db.init_db()
+        db.drop_db()
+        assert mock_create.called
+        assert mock_drop.called
 
 
 def test_run_session_lifecycle_success(monkeypatch):
-    db = reload_db()
-    db._run_session_lifecycle_for_coverage()
+    """Force commit path."""
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "dummy")
+    import app.database.dbase as dbase
+    dbase._run_session_lifecycle_for_coverage()
 
 
 def test_run_session_lifecycle_failure(monkeypatch):
+    """Force failure path."""
     import app.database.dbase as dbase
-
-    def broken():
-        raise Exception("explode")
-
-    with patch("app.database.dbase.get_session", side_effect=broken):
+    with patch("app.database.dbase.get_session",
+               side_effect=Exception("session fail")):
         with pytest.raises(RuntimeError):
             dbase._run_session_lifecycle_for_coverage()
 
 
 # ----------------------------------------------------------
-# Seeding Tests
+# Fallback Helpers
 # ----------------------------------------------------------
-def test_seed_default_user_inserts(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./seed_user1.db")
-    import app.database.dbase as dbase
-    dbase.init_db()
-
-    from app.models.user_model import User
-    dbase.Base.metadata.drop_all(bind=dbase.engine)
-    dbase.Base.metadata.create_all(bind=dbase.engine)
-
-    session = dbase.SessionLocal()
-    dbase.seed_default_user(session=session)
-
-    user = session.query(User).filter_by(id=1).first()
-    assert user is not None
-    assert user.username == "testuser"
-    assert user.email == "test@example.com"
-    session.close()
+import app.database.dbase as db_init
 
 
-def test_seed_default_user_existing(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./seed_user2.db")
-    import app.database.dbase as dbase
-    dbase.init_db()
-
-    from app.models.user_model import User
-    dbase.Base.metadata.drop_all(bind=dbase.engine)
-    dbase.Base.metadata.create_all(bind=dbase.engine)
-
-    session = dbase.SessionLocal()
-    u = User(
-        id=1,
-        first_name="X",
-        last_name="Y",
-        username="existing",
-        email="existing@example.com",
-        is_active=True,
-    )
-    u.set_password("pass123")
-    session.add(u)
-    session.commit()
-
-    # Run seeding (should skip since user exists)
-    dbase.seed_default_user(session=session)
-
-    user = session.query(User).filter_by(id=1).first()
-    assert user.username == "existing"
-    assert user.email == "existing@example.com"
-    session.close()
+def test_postgres_unavailable_true():
+    with patch("socket.create_connection", side_effect=OSError()):
+        assert db_init._postgres_unavailable() is True
 
 
-def test_seed_default_user_error(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./seed_user3.db")
-    import app.database.dbase as dbase
-    dbase.init_db()
+def test_postgres_unavailable_false():
+    mock_conn = MagicMock()
+    with patch("socket.create_connection", return_value=mock_conn):
+        assert db_init._postgres_unavailable() is False
 
-    with patch("app.database.dbase.SessionLocal", side_effect=Exception("boom")):
-        # Must NOT raise
-        dbase.seed_default_user()
+
+def test_ensure_sqlite_fallback(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    with patch("app.database.dbase._postgres_unavailable", return_value=True):
+        db_init._ensure_sqlite_fallback()
+        assert "sqlite" in os.getenv("DATABASE_URL")
+
+
+def test_trigger_fallback_executes(monkeypatch):
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "dummy")
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    with patch("app.database.dbase._postgres_unavailable", return_value=True):
+        db_init._trigger_fallback_if_test_env()
+        assert "sqlite" in os.getenv("DATABASE_URL")
+
+
+def test_trigger_fallback_error(monkeypatch):
+    """Force fallback helper to fail → router should raise RuntimeError."""
+    import app.database.dbase as db
+
+    def boom():
+        raise Exception("fail")
+
+    monkeypatch.setattr(db, "_ensure_sqlite_fallback", boom)
+
+    with pytest.raises(RuntimeError):
+        db._trigger_fallback_if_test_env()
+

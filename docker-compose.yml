@@ -1,17 +1,15 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Assignment-11: Full Docker Compose Stack
+# Date: 11/19/2025
+# Assignment-11: Modular API + DB-Backed Calculations
 # File: docker-compose.yml
 # ----------------------------------------------------------
 # Description:
-#   • Orchestrates the Calculator Project stack:
-#       - FastAPI Application
-#       - PostgreSQL Database
-#       - pgAdmin Web UI
-#       - Playwright E2E Test Runner
-#   • Ensures correct startup order using health checks
-#   • E2E tests bypass pytest-cov to avoid coverage failures
-#   • Local pytest.ini still enforces >90% coverage (NOT in Docker)
+# Multi-container stack for:
+#   • FastAPI backend
+#   • PostgreSQL database
+#   • pgAdmin web UI
+#   • Pytest test runner
 # ----------------------------------------------------------
 
 name: module11_calculation_model_project
@@ -19,16 +17,17 @@ name: module11_calculation_model_project
 services:
 
   # --------------------------------------------------------
-  # FastAPI Application
+  # FASTAPI APPLICATION
   # --------------------------------------------------------
   app:
     container_name: module11_app
     build:
       context: .
       dockerfile: Dockerfile
-    image: module11_calculation_model:img11
+    image: module11_test_calculation_model:img_m11
     restart: always
-    env_file: .env
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     depends_on:
@@ -36,17 +35,18 @@ services:
         condition: service_healthy
     command: >
       uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
     networks:
-      - m11_net
+      - app-network
 
   # --------------------------------------------------------
-  # PostgreSQL Database
+  # POSTGRES DATABASE
   # --------------------------------------------------------
   db:
     container_name: module11_postgres
     image: postgres:15
     restart: always
-    env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -54,17 +54,17 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
     networks:
-      - m11_net
+      - app-network
 
   # --------------------------------------------------------
-  # pgAdmin Web UI (Database Management)
+  # PGADMIN
   # --------------------------------------------------------
   pgadmin:
     container_name: module11_pgadmin
@@ -73,57 +73,63 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file: .env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "5050:80"
     volumes:
-      - pgadmin_volume:/var/lib/pgadmin
+      - pgadmin_data:/var/lib/pgadmin
     networks:
-      - m11_net
+      - app-network
 
   # --------------------------------------------------------
-  # Playwright E2E Test Runner
+  # PYTEST CONTAINER
   # --------------------------------------------------------
   tests:
     container_name: module11_tests
     build:
       context: .
       dockerfile: Dockerfile
-    image: module11_calculation_model_tests:img11
+    image: module11_test_calculation_model:img_m11
     depends_on:
       db:
         condition: service_healthy
-      app:
-        condition: service_started
-    env_file: .env
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/test_db
-      BASE_URL: "http://app:8000"
-      PLAYWRIGHT_BROWSERS_PATH: "/home/appuser/.cache/ms-playwright"
     command: >
       bash -c "
         export PGPASSWORD=${POSTGRES_PASSWORD};
-        until pg_isready -h db -U ${POSTGRES_USER} >/dev/null 2>&1; do sleep 2; done;
 
-        # Disable coverage plugins + wipe pytest.ini coverage options
-        export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1;
-        export PYTEST_ADDOPTS=;
+        echo 'Waiting for PostgreSQL...';
+        until pg_isready -h db -U ${POSTGRES_USER}; do sleep 2; done;
 
-        pytest -m 'e2e' -q
+        echo 'Checking test_db...';
+        EXISTS=$(psql -h db -U ${POSTGRES_USER} -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='test_db';\")
+
+        if [ \"$EXISTS\" != \"1\" ]; then
+            echo 'Creating test_db...';
+            psql -h db -U ${POSTGRES_USER} -d postgres -c \"CREATE DATABASE test_db;\"
+        fi
+
+        echo 'Running pytest...';
+        pytest --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings;
       "
     networks:
-      - m11_net
+      - app-network
 
-# --------------------------------------------------------
-# Persistent Volumes
-# --------------------------------------------------------
+# ----------------------------------------------------------
+# VOLUMES
+# ----------------------------------------------------------
 volumes:
-  pgdata:
-  pgadmin_volume:
+  postgres_data:
+  pgadmin_data:
 
-# --------------------------------------------------------
-# Shared Network
-# --------------------------------------------------------
+# ----------------------------------------------------------
+# NETWORK
+# ----------------------------------------------------------
 networks:
-  m11_net:
+  app-network:
     driver: bridge
