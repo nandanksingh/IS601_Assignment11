@@ -1,51 +1,63 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/20/2025
-# Assignment-11: Calculator Router (Factory + /calc/compute API)
+# Date: 11/17/2025
+# Assignment-11: Calculation Router (Factory + DB Storage)
 # File: app/routers/calc.py
 # ----------------------------------------------------------
-# Description:
-#   SINGLE endpoint required by professor & test suite:
-#       POST /calc/compute
-#
-#   Accepts:
-#       {
-#         "type": "add" | "subtract" | "multiply" | "divide",
-#         "a": 5,
-#         "b": 7
-#       }
-#
-#   Returns:
-#       { "result": 12 }
-#
-#   Fully compatible with:
-#       • test_fastapi_calculator.py
-#       • test_e2e.py
-#       • templates/index.html (UI)
-# ----------------------------------------------------------
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+
 from app.factory.calculation_factory import CalculationFactory
-from app.schemas.cal_schemas import CalculationCompute, CalculationRead
+from app.models.cal_models import Calculation
+from app.schemas.cal_schemas import CalculationCreate, CalculationRead
+from app.database.dbase import get_session
 
-router = APIRouter(prefix="/calc", tags=["Calculator"])
+router = APIRouter(prefix="/calc", tags=["Calculation"])
 
 
 @router.post("/compute", response_model=CalculationRead)
-async def compute_calculation(payload: CalculationCompute):
+def compute_calculation(
+    payload: CalculationCreate,
+    db: Session = Depends(get_session),
+):
     """
-    Perform arithmetic operation using CalculationFactory.
-    This endpoint is the ONLY one required by professor's tests.
+    Compute result using CalculationFactory, store in DB,
+    return CalculationRead schema.
     """
-    try:
-        operation = CalculationFactory.create(payload.type)
-        result = operation.compute(payload.a, payload.b)
 
+    # 1. Factory computation
+    try:
+        operation = CalculationFactory.create(
+            payload.type, payload.a, payload.b
+        )
     except ValueError as e:
-        # Wrong operation name or divide-by-zero
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    result_value = operation.result
+
+    # 2. Default user_id to avoid FK failures
+    user_id = getattr(payload, "user_id", None) or 1
+
+    # 3. ORM Insert
+    calc_entry = Calculation(
+        type=payload.type,
+        a=payload.a,
+        b=payload.b,
+        result=result_value,
+        user_id=user_id,
+    )
+
+    try:
+        db.add(calc_entry)
+        db.commit()
+        db.refresh(calc_entry)
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Database error: {str(e)}"},
         )
 
-    return CalculationRead(result=result)
+    return CalculationRead.from_orm(calc_entry)

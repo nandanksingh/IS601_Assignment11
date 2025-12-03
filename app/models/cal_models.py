@@ -1,67 +1,56 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/19/2025
-# Assignment-11: Calculation SQLAlchemy Model 
+# Date: 11/16/2025
+# Assignment-11: Calculation ORM Model 
 # File: app/models/cal_models.py
 # ----------------------------------------------------------
 # Description:
-# SQLAlchemy model that stores all calculator operations
-# performed by authenticated users.
-#
-# Fully compatible with:
-#   • CalculationCreate / CalculationRead (Pydantic v2)
-#   • Factory Pattern (CalculationFactory)
-#   • Assignment-11 integration tests:
-#        - FK integrity tests
-#        - ORM persistence tests
-#        - test_invalid_user_id_fails
-#
-# Notes:
-#   • ForeignKey includes ondelete="CASCADE"
-#     ensuring test_invalid_user_id_fails correctly triggers
-#     sqlalchemy.exc.IntegrityError when invalid user_id is used.
+# This module defines the Calculation ORM model used for storing
+# arithmetic operations in the database. Each record belongs to
+# a user and stores operation type, numeric inputs, and computed
+# result. The model includes helper methods for computing the
+# output using the CalculationFactory in a consistent manner.
 # ----------------------------------------------------------
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, ForeignKey
 from sqlalchemy.orm import relationship
+
 from app.database.dbase import Base
 
 
 class Calculation(Base):
     __tablename__ = "calculations"
 
-    # Primary Key
-    id = Column(Integer, primary_key=True, index=True)
-
-    # Operation type: add / subtract / multiply / divide
-    type = Column(String(20), nullable=False)
-
-    # Numeric operands
+    id = Column(Integer, primary_key=True)
+    type = Column(String, nullable=False)
     a = Column(Float, nullable=False)
     b = Column(Float, nullable=False)
+    result = Column(Float, nullable=True)
 
-    # Computed result of the operation
-    result = Column(Float, nullable=False)
-
-    # FK → users.id
-    # CASCADE ensures proper behavior in test_invalid_user_id_fails
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    # Relationship to User model
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     user = relationship("User", back_populates="calculations")
 
-    def __repr__(self) -> str:
-        """
-        Safe string representation used in multiple test cases.
-        Never raises errors even if fields are None.
-        """
+    # ------------------------------------------------------
+    # Compute result using the CalculationFactory
+    # ------------------------------------------------------
+    def compute(self) -> float:
+        from app.factory.calculation_factory import CalculationFactory
+        operation = CalculationFactory.create(self.type, self.a, self.b)
+        return operation.result
+
+    # ------------------------------------------------------
+    # Compute and persist result in object attribute
+    # ------------------------------------------------------
+    def compute_and_set_result(self) -> float:
+        self.result = self.compute()
+        return self.result
+
+    # ------------------------------------------------------
+    # Debug-friendly representation
+    # ------------------------------------------------------
+    def __repr__(self):
         return (
-            f"Calculation(id={self.id}, type='{self.type}', "
-            f"a={self.a}, b={self.b}, result={self.result}, "
-            f"user_id={self.user_id})"
+            f"Calculation(id={self.id}, "
+            f"type='{self.type}', a={self.a}, "
+            f"b={self.b}, result={self.result})"
         )

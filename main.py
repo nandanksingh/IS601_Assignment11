@@ -1,69 +1,58 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
 # Date: 11/17/2025
-# Assignment-11: Modular API Architecture + Database Storage
+# Assignment-11: FastAPI Application Entrypoint 
 # File: main.py
 # ----------------------------------------------------------
 # Description:
-# Central FastAPI application entrypoint.
+# Main entrypoint for the FastAPI Modular Calculator project.
 #
-# Loads modular routers for:
-#   • Authentication (JWT + Users)
-#   • Calculator API (Factory + DB-backed)
-#   • UI routes (index.html with Jinja2)
-#   • Health check endpoint
-#
-# Features:
-#   • Pydantic v2-ready configuration
-#   • CORS middleware (development safe)
-#   • Automatic DB initialization on startup
-#   • Clean logging setup
+# Responsibilities:
+#   • Create FastAPI app instance
+#   • Enable CORS middleware for UI & Playwright
+#   • Register routers: auth, health, calc, ui
+#   • Initialize database tables on startup
+#   • Seed default user (ONLY outside pytest)
+#   • Serve templates/index.html at "/"
 # ----------------------------------------------------------
 
+import os
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
-import logging
 
-# Core settings and DB initialization
-from app.core.config import settings
-from app.database.dbase import init_db
+from app.database.dbase import init_db, seed_default_user
 
 # Routers
 from app.routers.auth import router as auth_router
+from app.routers.health import router as health_router
 from app.routers.calc import router as calc_router
 from app.routers.ui import router as ui_router
-from app.routers.health import router as health_router
 
 
 # ----------------------------------------------------------
-# Application Initialization
+# Create FastAPI app
 # ----------------------------------------------------------
 app = FastAPI(
     title="FastAPI Modular Calculator",
-    description="Assignment-11: Calculation Model + Factory + JWT + PostgreSQL",
+    description="Assignment-11: Calculation Model • Factory Pattern • Pydantic v2",
     version="1.0.0",
 )
 
+# ----------------------------------------------------------
+# Logging Setup
+# ----------------------------------------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("app")
 
 # ----------------------------------------------------------
-# Logging Configuration
-# ----------------------------------------------------------
-logging.basicConfig(
-    level=settings.LOG_LEVEL,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger("main")
-
-
-# ----------------------------------------------------------
-# Template Loader (UI)
+# Template Loader
 # ----------------------------------------------------------
 templates = Jinja2Templates(directory="templates")
 
-
 # ----------------------------------------------------------
-# CORS Settings (Dev-safe, open)
+# CORS Middleware
 # ----------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
@@ -73,41 +62,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ----------------------------------------------------------
-# Include Routers
-# IMPORTANT FIX:
-#   calc_router already has prefix="/calc"
-#   → so DO NOT prefix again!!
+# Register Routers
 # ----------------------------------------------------------
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-app.include_router(calc_router, tags=["Calculations"])  # FIXED ✔
-app.include_router(ui_router, prefix="/ui", tags=["UI"])
 app.include_router(health_router, tags=["Health"])
-
+app.include_router(calc_router, tags=["Calculator"])  # final: /calc/compute
+app.include_router(ui_router, prefix="/ui", tags=["UI"])
 
 # ----------------------------------------------------------
-# Startup Hook (Initialize Database)
+# Startup Event — DB Initialization + Conditional Seeding
 # ----------------------------------------------------------
 @app.on_event("startup")
 def on_startup():
-    """Initialize database tables when FastAPI boots."""
-    logger.info("Starting application… initializing database.")
+    logger.info("Initializing database...")
     init_db()
-    logger.info("Database initialized successfully.")
+
+    # VERY IMPORTANT:
+    # Prevent seeding during pytest so we avoid duplicate users
+    if os.getenv("ENV", "").lower() != "testing":
+        logger.info("Seeding default user...")
+        seed_default_user()
+
+    logger.info("Startup sequence complete.")
 
 
 # ----------------------------------------------------------
-# Root Homepage Route
+# Serve Root UI — GET /
 # ----------------------------------------------------------
-@app.get("/", tags=["Root"])
-def home(request: Request):
-    """
-    Must return index.html.
-    Required for:
-      • E2E tests (Playwright)
-      • Browser UI
-    """
+@app.get("/", tags=["UI"])
+def root(request: Request):
     return templates.TemplateResponse(
         "index.html",
         {"request": request},

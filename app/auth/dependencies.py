@@ -1,26 +1,26 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/18/2025
+# Date: 11/15/2025
 # Assignment-11: Authentication Dependencies
 # File: app/auth/dependencies.py
 # ----------------------------------------------------------
 # Description:
-# Test-aligned authentication logic:
-#   • DB session dependency
-#   • User authentication
-#   • JWT create/verify wrappers
-#   • get_current_user() for routes
+# Central authentication helpers used across Module-11:
+#   • Database session dependency
+#   • JWT encode/decode wrappers
+#   • User authentication helper
+#   • get_current_user() for protected routes
 # ----------------------------------------------------------
 
 from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.database.dbase import get_session
+from app.database.dbase import SessionLocal
 from app.models.user_model import User
 from app.schemas.user_schema import TokenData
 from app.auth.security import (
-    hash_password,
     verify_password,
     create_access_token as jwt_create_token,
     decode_access_token as jwt_decode_token,
@@ -32,41 +32,44 @@ from app.auth.security import (
 #   dependencies.SECRET_KEY
 #   dependencies.ALGORITHM
 # ----------------------------------------------------------
-#SECRET_KEY = settings.JWT_SECRET_KEY
-#ALGORITHM = settings.JWT_ALGORITHM
-# ----------------------------------------------------------
-# JWT Key + Algorithm (tests expect these names)
-# ----------------------------------------------------------
-SECRET_KEY = getattr(settings, "JWT_SECRET_KEY", settings.SECRET_KEY)
-ALGORITHM = getattr(settings, "JWT_ALGORITHM", settings.ALGORITHM)
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+
+# OAuth2 Bearer token extractor
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
 
 # ----------------------------------------------------------
-# DB Session Dependency
+# Database Session Dependency (Final Correct Version)
 # ----------------------------------------------------------
 def get_db():
-    db = get_session()
-    db.closed = False
+    """
+    Provides a clean SQLAlchemy session.
+    Compatible with FastAPI + Assignment-11 tests.
+    """
+    db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-        db.closed = True
 
 
 # ----------------------------------------------------------
-# Token Creation Wrapper (test_create_access_token_wrapper)
+# JWT Creation Wrapper
 # ----------------------------------------------------------
 def create_access_token(data: dict) -> str:
+    """Test-visible wrapper."""
     return jwt_create_token(data)
 
 
 # ----------------------------------------------------------
-# Token Verification Wrapper
+# JWT Verification Wrapper
 # ----------------------------------------------------------
 def verify_access_token(token: str) -> dict:
+    """Test-visible wrapper with 401 handling."""
     try:
         return jwt_decode_token(token)
-    except RuntimeError as e:
+    except RuntimeError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
@@ -74,9 +77,12 @@ def verify_access_token(token: str) -> dict:
 
 
 # ----------------------------------------------------------
-# Authenticate User
+# Authenticate User (username or email)
 # ----------------------------------------------------------
 def authenticate_user(db: Session, identifier: str, password: str):
+    """
+    Authenticate by username OR email.
+    """
     user = (
         db.query(User)
         .filter((User.username == identifier) | (User.email == identifier))
@@ -93,20 +99,16 @@ def authenticate_user(db: Session, identifier: str, password: str):
 
 
 # ----------------------------------------------------------
-# Get Current User (multiple test expectations)
+# Return Current Authenticated User
 # ----------------------------------------------------------
 def get_current_user(
-    token: str,
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
-    # 1. Missing token
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    # 2. Decode
+    """
+    Extract user from Bearer token.
+    """
+    # Decode token
     try:
         payload = jwt_decode_token(token)
     except RuntimeError:
@@ -115,15 +117,15 @@ def get_current_user(
             detail="Invalid or expired token",
         )
 
-    # 3. Missing "sub" field
+    # Extract user ID (sub)
     sub = payload.get("sub")
     if not sub:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing user id in token",   
+            detail="Missing user id in token",
         )
 
-    # 4. User lookup
+    # Fetch user
     user = db.query(User).filter(User.id == int(sub)).first()
     if not user:
         raise HTTPException(

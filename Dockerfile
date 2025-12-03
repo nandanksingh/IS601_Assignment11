@@ -1,91 +1,95 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/15/2025
-# Assignment-11: Calculation Model, Pydantic Validation,
-#                Factory Pattern & Docker Deployment
-# File: Dockerfile
+# Assignment-11: Dockerfile 
 # ----------------------------------------------------------
 # Description:
-# Production-grade Dockerfile for the FastAPI Modular Calculator.
-#
-# Features:
-#   • Python 3.12-slim (small + fast)
-#   • PostgreSQL client installed (fixes pg_isready error)
-#   • Non-root secure user (appuser)
-#   • Layer-cached pip dependency installation
-#   • CI/CD-friendly
-#   • Healthcheck hitting /health
-#   • Uvicorn (2 workers) optimized for API apps
+#   • Production-ready container for Calculator project
+#   • FastAPI application with SQLAlchemy + PostgreSQL client
+#   • Playwright + Chromium for E2E tests
+#   • Non-root execution for security
 # ----------------------------------------------------------
 
+FROM python:3.12-slim
 
 # ----------------------------------------------------------
-# 1. Base Image
+# Environment Variables
 # ----------------------------------------------------------
-FROM python:3.12-slim AS base
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/home/appuser/.cache/ms-playwright \
     PATH="/home/appuser/.local/bin:$PATH"
 
 WORKDIR /app
 
-
 # ----------------------------------------------------------
-# 2. Install System Dependencies
+# Install System Dependencies (Chromium Runtime Libraries)
 # ----------------------------------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \
+        libffi-dev \
         postgresql-client \
-        curl \
-    && rm -rf /var/lib/apt/lists/*
-
+        curl wget gnupg ca-certificates procps \
+        libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+        libcups2 libxkbcommon0 libxcomposite1 libxdamage1 \
+        libxfixes3 libxrandr2 libgbm1 libasound2 \
+        libpangocairo-1.0-0 libpango-1.0-0 \
+        libgtk-3-0 libx11-xcb1 xvfb \
+        fonts-unifont fonts-dejavu fonts-liberation && \
+    rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------------
-# 3. Security: Create Non-root User
+# Create Application User
 # ----------------------------------------------------------
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-
+RUN groupadd -r appgroup && \
+    useradd -r -g appgroup -m appuser
 
 # ----------------------------------------------------------
-# 4. Install Python Dependencies
+# Install Python Dependencies
 # ----------------------------------------------------------
 COPY requirements.txt .
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
-
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 # ----------------------------------------------------------
-# 5. Copy Application Source Code
+# Install Playwright (Python package only)
 # ----------------------------------------------------------
-# Includes:
-#   • main.py (root)
-#   • app/ folder
-#   • templates/
-#   • .env (optional)
+RUN pip install playwright
+
+# ----------------------------------------------------------
+# Install Chromium Browsers (as appuser — critical step)
+# ----------------------------------------------------------
+USER appuser
+RUN mkdir -p /home/appuser/.cache/ms-playwright && \
+    PLAYWRIGHT_BROWSERS_PATH=/home/appuser/.cache/ms-playwright \
+    playwright install chromium
+
+# ----------------------------------------------------------
+# Copy Application Source Code
+# ----------------------------------------------------------
+USER root
 COPY . .
-
-
-# ----------------------------------------------------------
-# 6. File Permissions
-# ----------------------------------------------------------
 RUN chown -R appuser:appgroup /app
+
+# ----------------------------------------------------------
+# Switch to Runtime User
+# ----------------------------------------------------------
 USER appuser
 
-
 # ----------------------------------------------------------
-# 7. Expose port + Healthcheck
+# Expose Application Port
 # ----------------------------------------------------------
 EXPOSE 8000
 
-HEALTHCHECK --interval=20s --timeout=5s --retries=3 \
+# ----------------------------------------------------------
+# Health Check (always uses localhost:8000)
+# ----------------------------------------------------------
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-
 # ----------------------------------------------------------
-# 8. Entrypoint — start FastAPI with Uvicorn
+# Default Application Command
 # ----------------------------------------------------------
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

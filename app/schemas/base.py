@@ -10,9 +10,8 @@
 #
 # Defines:
 #   • UserBase        → first_name, last_name, username, email
-#   • PasswordMixin   → strong password validation
-#   • UserCreate      → registration schema
-#   • UserLogin       → login schema
+#   • PasswordMixin   → strong password validation (uppercase,
+#                       lowercase, digit, minimum length)
 #
 # Fully compatible with:
 #   • Pydantic v2
@@ -24,8 +23,8 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 
 
 # ----------------------------------------------------------
-# Base Schema for User Fields
-# Test requires:
+# Base Schema for Shared User Fields
+# Tests require:
 #   first_name: str
 #   last_name: str
 #   username : str
@@ -34,7 +33,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 class UserBase(BaseModel):
     """
     Shared fields used across user schemas.
-    Tests expect first_name + last_name present.
+    Includes first_name, last_name, username, and email.
     """
 
     first_name: str = Field(..., min_length=1, max_length=100)
@@ -56,20 +55,21 @@ class UserBase(BaseModel):
 
 
 # ----------------------------------------------------------
-# Password Validator Mixin
+# Password Validation Mixin
+# Enforces:
+#   • Minimum 6 characters
+#   • At least one lowercase letter
+#   • At least one uppercase letter
+#   • At least one digit
 # ----------------------------------------------------------
 class PasswordMixin(BaseModel):
-    """
-    Enforces strong password rules:
-      • length >= 6
-      • must include uppercase, lowercase, digit
-    """
+    """Reusable password validation logic."""
 
     password: str = Field(
         ...,
         min_length=6,
         max_length=128,
-        description="Password must contain uppercase, lowercase, and digits",
+        description="Password must include uppercase, lowercase, and digits.",
     )
 
     @model_validator(mode="before")
@@ -89,22 +89,3 @@ class PasswordMixin(BaseModel):
             raise ValueError("Password must contain at least one numeric digit.")
 
         return values
-
-
-# ----------------------------------------------------------
-# Derived Schemas
-# ----------------------------------------------------------
-class UserCreate(UserBase, PasswordMixin):
-    """Schema for registration."""
-    pass
-
-
-class UserLogin(PasswordMixin):
-    """Schema for login: username or email + password."""
-
-    username: str = Field(
-        ...,
-        min_length=3,
-        max_length=50,
-        description="Username or email used for login",
-    )

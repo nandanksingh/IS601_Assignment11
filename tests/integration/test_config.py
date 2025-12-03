@@ -1,20 +1,22 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
 # Date: 11/17/2025
-# Assignment-11: Configuration Module Integration Tests
-# File: tests/integration/test_config.py
+# Module 11: Configuration Module Integration Tests
+# File: tests/unit/test_config.py
 # ----------------------------------------------------------
 # Description:
-# Integration test suite for the application configuration module.
+# Tests for the application configuration system.
 #
 # Covers:
 #   • Environment flag logic (is_dev, is_prod, is_test)
-#   • reload_settings() ensuring updated environment values reload correctly
+#   • reload_settings() ensuring updated ENV variables reload correctly
 #   • get_environment_mode() readable labels for different ENV values
+#
+# Ensures config.py behaves correctly in all test environments.
 # ----------------------------------------------------------
 
-import os
 import pytest
+import os
 from app.core.config import Settings, reload_settings, get_environment_mode
 
 
@@ -22,23 +24,23 @@ from app.core.config import Settings, reload_settings, get_environment_mode
 # Environment Flag Tests
 # ----------------------------------------------------------
 def test_environment_flags(monkeypatch):
-    """Verify is_dev / is_prod / is_test properties under each ENV mode."""
+    """Verify is_dev / is_prod / is_test react correctly to ENV."""
 
-    # Development
+    # Development mode
     monkeypatch.setenv("ENV", "development")
     s = Settings()
     assert s.is_dev is True
     assert s.is_prod is False
     assert s.is_test is False
 
-    # Production
+    # Production mode
     monkeypatch.setenv("ENV", "production")
     s = Settings()
     assert s.is_prod is True
     assert s.is_dev is False
     assert s.is_test is False
 
-    # Testing
+    # Testing mode
     monkeypatch.setenv("ENV", "testing")
     s = Settings()
     assert s.is_test is True
@@ -49,18 +51,18 @@ def test_environment_flags(monkeypatch):
 # ----------------------------------------------------------
 # reload_settings() Tests
 # ----------------------------------------------------------
-def test_reload_updates_values(monkeypatch):
-    """Ensure reload_settings() rebuilds the global settings instance."""
+def test_reload_settings(monkeypatch):
+    """Ensure global Settings object reloads after environment changes."""
 
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./changed.db")
-    monkeypatch.setenv("SECRET_KEY", "newkey123")
+    monkeypatch.setenv("SECRET_KEY", "mynewsecret")
     monkeypatch.setenv("ENV", "testing")
 
-    updated = reload_settings()
+    new_settings = reload_settings()
 
-    assert updated.DATABASE_URL == "sqlite:///./changed.db"
-    assert updated.SECRET_KEY == "newkey123"
-    assert updated.is_test is True
+    assert new_settings.DATABASE_URL == "sqlite:///./changed.db"
+    assert new_settings.SECRET_KEY == "mynewsecret"
+    assert new_settings.is_test is True
 
 
 # ----------------------------------------------------------
@@ -72,9 +74,10 @@ def test_reload_updates_values(monkeypatch):
         ("development", "development mode"),
         ("production", "production mode"),
         ("testing", "testing mode"),
-        ("something_else", "Unknown environment"),
+        ("staging", "Unknown environment"),
     ],
 )
-def test_print_environment_modes(env_value, expected):
-    """Validate conversion of ENV string into readable text."""
-    assert expected.lower() in get_environment_mode(env_value).lower()
+def test_environment_mode_output(env_value, expected):
+    """Validate mapping of ENV → human-readable label."""
+    result = get_environment_mode(env_value)
+    assert expected.lower() in result.lower()

@@ -20,44 +20,43 @@ from pydantic_settings import BaseSettings
 
 
 # ----------------------------------------------------------
-#  Settings Class (Pydantic v2)
+# Pydantic Settings Class (v2)
 # ----------------------------------------------------------
 class Settings(BaseSettings):
     """
     Main configuration container for:
-      - Database URLs
-      - Authentication & JWT settings
-      - Environment mode (dev / prod / testing)
-      - Application-wide defaults
-
-    Loaded from:
+      • Database URL resolution
+      • JWT & security settings
+      • Environment mode control (dev / prod / testing)
+      • Logging level
+    Loaded automatically from:
       • Environment variables
-      • .env file in the project root
+      • .env file in project root
     """
 
-    # -----------------------------
-    # Database Settings
-    # -----------------------------
+    # ------------------------------------------------------
+    # Database Configuration
+    # ------------------------------------------------------
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
 
-    # -----------------------------
-    # Security / JWT
-    # -----------------------------
+    # ------------------------------------------------------
+    # JWT + Security Settings
+    # ------------------------------------------------------
     SECRET_KEY: str = os.getenv("SECRET_KEY", "super_secret_key_123")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
         os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)
     )
 
-    # -----------------------------
-    # Runtime Environment
-    # -----------------------------
+    # ------------------------------------------------------
+    # Environment Mode (development / production / testing)
+    # ------------------------------------------------------
     ENV: str = os.getenv("ENV", "development")
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")  # ✅ Added for logging setup
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
-    # -----------------------------
-    # Helper Properties
-    # -----------------------------
+    # ------------------------------------------------------
+    # Helper Flags
+    # ------------------------------------------------------
     @property
     def is_dev(self) -> bool:
         """Return True if running in development mode."""
@@ -73,9 +72,9 @@ class Settings(BaseSettings):
         """Return True if running under pytest or ENV=testing."""
         return self.ENV.lower() == "testing"
 
-    # -----------------------------
-    # Pydantic model configuration
-    # -----------------------------
+    # ------------------------------------------------------
+    # Pydantic Model Configuration
+    # ------------------------------------------------------
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -84,22 +83,22 @@ class Settings(BaseSettings):
 
 
 # ----------------------------------------------------------
-# Global settings instance used throughout the project
+# Global Singleton Settings Instance
 # ----------------------------------------------------------
 settings = Settings()
 
 
 # ----------------------------------------------------------
-# TEST HOOKS — Required by test suite
+# TEST UTILITIES (Required for Module-11 & CI)
 # ----------------------------------------------------------
 def reload_settings() -> Settings:
     """
-    Re-load settings after environment variables change.
-    Tests use this to verify dynamic environment behavior.
+    Re-load configuration after environment variables change.
 
-    Example:
+    Example in tests:
         os.environ["ENV"] = "testing"
-        new_settings = reload_settings()
+        cfg = reload_settings()
+        assert cfg.is_test
     """
     global settings
     settings = Settings()
@@ -108,13 +107,8 @@ def reload_settings() -> Settings:
 
 def get_environment_mode(env: str) -> str:
     """
-    Convert raw ENV names into human-readable mode labels.
-
-    Expected output:
-      • "development" → "development mode"
-      • "production"  → "production mode"
-      • "testing"     → "testing mode"
-      • anything else → "Unknown environment"
+    Convert an ENV string into a readable description.
+    Used in tests to verify proper environment interpretation.
     """
     env = (env or "").lower()
 

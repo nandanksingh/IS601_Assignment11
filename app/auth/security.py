@@ -1,26 +1,26 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/18/2025
+# Date: 11/17/2025
 # Assignment-11: Authentication Security Utilities
 # File: app/auth/security.py
 # ----------------------------------------------------------
 # Description:
-# Implements secure password hashing, verification, and JWT
-# creation/decoding. All functions are aligned with grading
-# tests. Handles both expected and unexpected token failures.
+# Provides password hashing / verification and JWT creation
+# using pyjwt (NOT python-jose). All functions work safely in
+# local, docker, and CI/CD environments.
 # ----------------------------------------------------------
 
 from datetime import datetime, timedelta
 from typing import Optional
-import jwt  # Using PyJWT (NOT python-jose, tests patch this)
+import jwt  # pyjwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
 
-# Password hashing context (bcrypt)
+# bcrypt hashing setup
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT settings (tests require these exact names)
+# JWT configs
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -31,10 +31,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 # ----------------------------------------------------------
 def hash_password(password: str) -> str:
     """
-    Hash a plaintext password.
-
-    Tests expect:
-        - Empty or non-string → ValueError("Password must be a non-empty string")
+    Hash a plaintext password using bcrypt.
+    Tests require:
+        - non-string or empty password -> ValueError
     """
     if not isinstance(password, str) or not password.strip():
         raise ValueError("Password must be a non-empty string")
@@ -42,15 +41,14 @@ def hash_password(password: str) -> str:
     try:
         return pwd_context.hash(password)
     except Exception as e:
+        # explicit branch for coverage
         raise RuntimeError("Password hashing failed") from e
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """
-    Verify a plaintext password against hashed value.
-
-    Tests expect:
-        - Invalid types → return False
+    Verify a plaintext password against a stored bcrypt hash.
+    Tests expect False rather than exceptions.
     """
     if not isinstance(plain, str) or not isinstance(hashed, str):
         return False
@@ -58,7 +56,16 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         return pwd_context.verify(plain, hashed)
     except Exception:
+        # explicit branch for coverage
         return False
+
+
+# ----------------------------------------------------------
+# REQUIRED BY TESTS
+# ----------------------------------------------------------
+def verify_password_hash(raw_password: str, stored_hash: str) -> bool:
+    """Compatibility wrapper required by Assignment-11 tests."""
+    return verify_password(raw_password, stored_hash)
 
 
 # ----------------------------------------------------------
@@ -66,10 +73,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 # ----------------------------------------------------------
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
-    Create a signed JWT token.
-
-    Tests expect:
-        - Forced encode failure → RuntimeError("JWT creation failed")
+    Create a signed JWT access token.
+    Any failure -> RuntimeError("JWT creation failed")
     """
     try:
         payload = data.copy()
@@ -81,7 +86,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
     except Exception as e:
-        # EXACT STRING required by tests
+        # explicit branch for coverage
         raise RuntimeError("JWT creation failed") from e
 
 
@@ -90,11 +95,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # ----------------------------------------------------------
 def decode_access_token(token: str) -> dict:
     """
-    Decode a JWT token and return payload.
-
-    Tests expect:
-        - Expired or invalid → RuntimeError("Invalid or expired token")
-        - Unexpected decode errors → RuntimeError("Token decode failure")
+    Decode and validate a JWT token.
+    On error -> RuntimeError("Invalid or expired token")
     """
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -103,8 +105,8 @@ def decode_access_token(token: str) -> dict:
         raise RuntimeError("Invalid or expired token")
 
     except jwt.InvalidTokenError:
-        # Covers decode errors, signature errors, etc.
         raise RuntimeError("Invalid or expired token")
 
     except Exception as e:
+        # explicit branch for coverage
         raise RuntimeError("Token decode failure") from e

@@ -1,31 +1,36 @@
 // ----------------------------------------------------------
 // Author: Nandan Kumar
-// Date: 11/08/2025
-// Assignment-10: Secure User Model, Pydantic Validation, and Docker Testing
+// Date: 11/20/2025
+// Assignment-11: Calculation Model + Modular FastAPI Setup
 // File: .vscode/settings.json
 // ----------------------------------------------------------
 // Description:
-// Configures VS Code for the FastAPI + PostgreSQL project.
-// Ensures consistent development experience under Windows 11
-// using WSL2 and Docker containers. Supports Python linting,
-// Black formatting, pytest testing, and Pylance path resolution.
+// VS Code configuration optimized for:
+//   • FastAPI + SQLAlchemy + Pydantic v2
+//   • WSL2 Ubuntu development
+//   • Black formatting, pylint, pytest
+//   • Pylance auto-import for 'app.*' modules
+//   • Clean workspace excluding cache folders
 // ----------------------------------------------------------
 {
   // --------------------------------------------------------
-  // Python Environment & Linting Configuration
+  // Python Environment (WSL2)
   // --------------------------------------------------------
-  "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python", // WSL2-compatible virtual env
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
   "python.analysis.extraPaths": [
-    "./app" // Ensures imports like 'from app.auth.security' are recognized
+    "./app"
   ],
   "python.analysis.autoImportCompletions": true,
   "python.analysis.typeCheckingMode": "basic",
+  // --------------------------------------------------------
+  // Linting + Formatting
+  // --------------------------------------------------------
   "python.linting.enabled": true,
   "python.linting.pylintEnabled": true,
   "editor.formatOnSave": true,
   "python.formatting.provider": "black",
   // --------------------------------------------------------
-  // Testing Setup (pytest)
+  // Pytest Configuration
   // --------------------------------------------------------
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
@@ -34,31 +39,28 @@
   ],
   "python.testing.autoTestDiscoverOnSaveEnabled": true,
   // --------------------------------------------------------
-  // File Exclusions (Hide Cache & Build Artifacts)
+  // Exclude Cache Files (Clean Explorer)
   // --------------------------------------------------------
   "files.exclude": {
     "**/__pycache__": true,
     "**/.pytest_cache": true,
-    "**/.mypy_cache": true,
-    "**/.vscode": false
+    "**/.mypy_cache": true
   },
   // --------------------------------------------------------
   // Editor & Terminal Behavior
   // --------------------------------------------------------
   "files.autoSave": "onFocusChange",
-  "terminal.integrated.encoding": "utf8",
+  "terminal.integrated.defaultProfile.linux": "bash",
   "terminal.integrated.env.linux": {
-    "PYTHONPATH": "${workspaceFolder}" // Makes 'app' imports work in VS Code Terminal
+    "PYTHONPATH": "${workspaceFolder}"
   },
   // --------------------------------------------------------
-  // Environment Management
+  // Environment Manager (Recommended for VS Code)
   // --------------------------------------------------------
-  "python.envs.defaultEnvManager": "ms-python.python:system",
-  "python.envs.pythonProjects": [],
+  "python.envs.defaultEnvManager": "ms-python.python:virtualenv",
   // --------------------------------------------------------
-  // Docker Integration (optional)
+  // Docker Integration (Optional)
   // --------------------------------------------------------
   "docker.defaultContext": "default",
-  "docker.explorerRefreshInterval": 2000,
-  "python-envs.pythonProjects": []
+  "docker.explorerRefreshInterval": 2500
 }

@@ -1,23 +1,25 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/09/2025 
-# FastAPI Modular Calculator CI/CD Pipeline
+# Date: 11/17/2025
+# Assignment-11: Calculation Model CI/CD Pipeline 
 # File: .github/workflows/test.yml
 # ----------------------------------------------------------
 # Description:
-# GitHub Actions pipeline:
-#   1. Run tests (coverage ≥ 90%)
-#   2. Run Trivy security scan
-#   3. Build + push verified image to Docker Hub
+# GitHub Actions pipeline for Module 11.
+# Performs:
+#   • Automated testing with PostgreSQL service
+#   • Code coverage enforcement (≥ 90%)
+#   • Trivy vulnerability scan on Docker image
+#   • Automatic Docker Hub build + push on main branch
 # ----------------------------------------------------------
 
 name: Assignment 11 - Calculation Model CI/CD
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -26,7 +28,7 @@ permissions:
 jobs:
 
   # --------------------------------------------------------
-  # 1. TEST JOB
+  # 1. TEST JOB — Unit + Integration Tests (≥ 90% Coverage)
   # --------------------------------------------------------
   test:
     runs-on: ubuntu-latest
@@ -37,24 +39,14 @@ jobs:
         env:
           POSTGRES_USER: ps_user
           POSTGRES_PASSWORD: ps_password
-          POSTGRES_DB: calc_app_db
+          POSTGRES_DB: calc_m11_db
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U ps_user"
+          --health-cmd="pg_isready -U ps_user -d calc_m11_db"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=8
-
-      app:
-        image: nandanksingh/module11_test_calculation_model:m11
-        ports:
-          - 8000:8000
-        options: >-
-          --health-cmd="curl --fail http://localhost:8000/health || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
 
     steps:
       - name: Checkout Repository
@@ -67,26 +59,25 @@ jobs:
 
       - name: Install Dependencies
         env:
-          DATABASE_URL: postgresql://ps_user:ps_password@postgres:5432/calc_app_db
+          DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/calc_m11_db
         run: |
           python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
 
-      - name: Wait for FastAPI to be ready
+      - name: Wait for PostgreSQL to be ready
         run: |
           for i in {1..30}; do
-            curl -s http://app:8000/health && break
-            echo "Waiting for FastAPI..."
+            pg_isready -h localhost -U ps_user -d calc_m11_db && break
+            echo "Waiting for PostgreSQL..."
             sleep 1
           done
 
       - name: Run Tests (Coverage ≥ 90%)
         env:
-          DATABASE_URL: postgresql://ps_user:ps_password@postgres:5432/calc_app_db
-          TEST_DATABASE_URL: postgresql://ps_user:ps_password@postgres:5432/test_db
-          E2E_BASE_URL: http://app:8000
+          DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/calc_m11_db
+          TEST_DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/test_db
         run: |
           source venv/bin/activate
           pytest --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings
@@ -98,7 +89,7 @@ jobs:
           path: htmlcov/
 
   # --------------------------------------------------------
-  # 2. SECURITY JOB
+  # 2. SECURITY JOB — Trivy Vulnerability Scan
   # --------------------------------------------------------
   security:
     needs: test
@@ -107,25 +98,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image for scanning
-        run: docker build -t nandanksingh/module11_test_calculation_model:m11 .
+      - name: Build Docker Image for Scanning
+        run: docker build -t module11_calculation_model:img11 .
 
-      - name: Trivy Scan
+      - name: Trivy Security Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: nandanksingh/module11_test_calculation_model:m11
+          image-ref: module11_calculation_model:img11
           format: table
           exit-code: 0
           ignore-unfixed: true
           severity: CRITICAL,HIGH
 
   # --------------------------------------------------------
-  # 3. DEPLOY JOB
+  # 3. DEPLOY JOB — Push to Docker Hub (Main Branch Only)
   # --------------------------------------------------------
   deploy:
     needs: security
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -136,14 +127,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build + Push Docker Image
+      - name: Build & Push Docker Image (img11)
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            nandanksingh/module11_test_calculation_model:m11
-            nandanksingh/module11_test_calculation_model:${{ github.sha }}
+            nandanksingh/module11_calculation_model:img11
+            nandanksingh/module11_calculation_model:${{ github.sha }}
 
       - name: Verify Push
-        run: docker pull nandanksingh/module11_test_calculation_model:m11
+        run: docker pull nandanksingh/module11_calculation_model:img11
