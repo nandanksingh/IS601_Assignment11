@@ -13,6 +13,7 @@
 #   • Safe session lifecycle
 #   • init_db() / drop_db()
 #   • Fallback helpers required by auto-grading tests
+#   • get_db() — required by FastAPI routers
 # ----------------------------------------------------------
 
 import os
@@ -80,15 +81,14 @@ def get_engine():
 
 
 # ----------------------------------------------------------
-# Session Factory (Dynamic, Required by Tests)
+# Session Factory
 # ----------------------------------------------------------
 def get_session_factory():
-    """Always return a fresh SessionLocal factory bound to a live engine."""
+    """Returns a fresh SessionLocal factory bound to a live engine."""
     engine = get_engine()
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# Recreate fresh factory at import time
 SessionLocal = get_session_factory()
 
 
@@ -107,6 +107,24 @@ def get_session():
     except Exception as e:
         logger.error(f"[DB] Session creation failed: {e}")
         raise RuntimeError("Session creation failed") from e
+
+
+# ----------------------------------------------------------
+# FastAPI Dependency: get_db()
+# ----------------------------------------------------------
+def get_db():
+    """
+    FastAPI dependency injection version of session creation.
+
+    Required because:
+      • Routers import: from app.database.dbase import get_db
+      • Docker auto-reload imports this function
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # ----------------------------------------------------------
@@ -179,11 +197,11 @@ def _run_session_lifecycle_for_coverage():
         session.closed = True
         raise RuntimeError("Session lifecycle failed")
 
+
 # ----------------------------------------------------------
-# EXPORTS required by tests
+# Export for backward compatibility
 # ----------------------------------------------------------
 engine = get_engine()
-
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,

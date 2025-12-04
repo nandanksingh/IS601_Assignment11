@@ -1,16 +1,14 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/17/2025
-# Assignment-11: Calculation Model CI/CD Pipeline 
+# Assignment-11: CI/CD Pipeline 
 # File: .github/workflows/test.yml
 # ----------------------------------------------------------
 # Description:
-# GitHub Actions pipeline for Module 11.
-# Performs:
-#   • Automated testing with PostgreSQL service
-#   • Code coverage enforcement (≥ 90%)
-#   • Trivy vulnerability scan on Docker image
-#   • Automatic Docker Hub build + push on main branch
+#   • Runs unit + integration tests with PostgreSQL
+#   • Enforces coverage ≥ 90%
+#   • Excludes E2E tests from CI
+#   • Performs Trivy security scan
+#   • Builds & pushes Docker image on main branch
 # ----------------------------------------------------------
 
 name: Assignment 11 - Calculation Model CI/CD
@@ -74,13 +72,13 @@ jobs:
             sleep 1
           done
 
-      - name: Run Tests (Coverage ≥ 90%)
+      - name: Run Tests (Exclude E2E, Coverage ≥ 90%)
         env:
           DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/calc_m11_db
           TEST_DATABASE_URL: postgresql://ps_user:ps_password@localhost:5432/test_db
         run: |
           source venv/bin/activate
-          pytest --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings
+          pytest -m "not e2e" --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4

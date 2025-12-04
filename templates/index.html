@@ -1,58 +1,45 @@
 <!-- ----------------------------------------------------------
- Author: Nandan Kumar
- Date: 11/16/2025
- Assignment-11: Calculation Model + UI Enhancement
- File: templates/index.html
- ----------------------------------------------------------
+     Author: Nandan Kumar
+     Assignment-11: FastAPI Modular Calculator (UI)
+     File: templates/index.html
+ ---------------------------------------------------------------
  Description:
- Modern, polished web-based calculator UI that communicates
- with the FastAPI backend using the POST /calc/compute route.
- Includes animated gradient background, glass-style card,
- accessible inputs, meaningful error messages, and is
- fully compatible with Playwright E2E tests.
-
- Notes:
- - Button labels MUST remain "Add", "Subtract", "Multiply", "Divide"
-   because Playwright's selectors depend on these exact strings.
- - The JS function must send lowercase operation types
-   (add/subtract/multiply/divide) to match API behavior.
- - The result box must output ONLY the numeric answer because
-   Playwright validates response using substring match.
- ---------------------------------------------------------- -->
+ • Fully animated login & calculator interface
+ • Smooth fade transitions between screens
+ • Secure JWT-based login with redirect
+ • Calculator supports add, subtract, multiply, divide
+ • Stylish glassmorphism UI with gradient background
+ • Glow animation on successful login
+ • Custom error handling (e.g., divide by zero)
+ -------------------------------------------------------------- -->
 
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>FastAPI Calculator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
-    /* --------------------------------------------------------
-       GLOBAL PAGE STYLING
-       Full-screen animated gradient background to provide
-       a modern and visually appealing look.
-       -------------------------------------------------------- */
+    /* ==========================================================
+       Global Background Animation
+       ========================================================== */
     body {
       font-family: "Segoe UI", Arial, sans-serif;
       margin: 0;
       height: 100vh;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
-
-      /* Animated ocean-blue gradient */
       background: linear-gradient(135deg, #0a4d7a, #0e6fa8, #13a7c7, #17c7e8);
       background-size: 200% 200%;
-      animation: oceanShift 8s ease infinite;
-
+      animation: shiftGradient 8s ease infinite;
+      overflow: hidden;
       color: #ffffff;
     }
 
-    /* Smooth movement animation for background */
-    @keyframes oceanShift {
+    @keyframes shiftGradient {
       0% {
         background-position: 0% 50%;
       }
@@ -66,43 +53,28 @@
       }
     }
 
-    /* --------------------------------------------------------
-       HEADERS
-       Large clean title with subtle shadow depth.
-       -------------------------------------------------------- */
-    h1 {
-      margin-bottom: 20px;
-      font-size: 2.4rem;
-      font-weight: 700;
-      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    /* ==========================================================
+       Fade Animations
+       ========================================================== */
+    .fade-out {
+      animation: fadeOut 0.6s forwards;
     }
 
-    /* --------------------------------------------------------
-       CALCULATOR CARD (Glassmorphism design)
-       Provides a frosted transparent style with inner glow.
-       -------------------------------------------------------- */
-    .calculator {
-      background: rgba(255, 255, 255, 0.18);
-      /* Transparent 'glass' layer */
-      backdrop-filter: blur(12px);
-      border-radius: 20px;
-      padding: 35px 45px;
-      width: 100%;
-      max-width: 420px;
-
-      box-shadow:
-        0 10px 25px rgba(0, 0, 0, 0.25),
-        inset 0 0 20px rgba(255, 255, 255, 0.15);
-
-      text-align: center;
-      animation: fadeIn 1s ease;
+    .fade-in {
+      animation: fadeIn 0.7s forwards;
     }
 
-    /* Fade-in effect for the main card */
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+    }
+
     @keyframes fadeIn {
       from {
         opacity: 0;
-        transform: translateY(15px);
+        transform: translateY(20px);
       }
 
       to {
@@ -111,161 +83,286 @@
       }
     }
 
-    /* --------------------------------------------------------
-       USER INPUT FIELDS
-       Simple, centered, rounded fields with focus glow.
-       -------------------------------------------------------- */
-    input {
-      margin: 10px;
-      width: 170px;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      background: rgba(255, 255, 255, 0.45);
-      font-size: 16px;
+    /* ==========================================================
+       Glow Animation (Success Login)
+       ========================================================== */
+    .success-glow {
+      animation: glowEffect 1.2s ease-out;
+    }
+
+    @keyframes glowEffect {
+      0% {
+        box-shadow: 0 0 0 rgba(0, 255, 120, 0);
+      }
+
+      40% {
+        box-shadow: 0 0 25px rgba(0, 255, 120, 0.9);
+      }
+
+      100% {
+        box-shadow: 0 0 0 rgba(0, 255, 120, 0);
+      }
+    }
+
+    /* ==========================================================
+       Card (Glassmorphism Panels)
+       ========================================================== */
+    .card {
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(15px);
+      border-radius: 22px;
+      padding: 40px 50px;
+      width: 420px;
       text-align: center;
-      outline: none;
-      transition: 0.3s;
+      box-shadow:
+        0 12px 30px rgba(0, 0, 0, 0.25),
+        inset 0 0 25px rgba(255, 255, 255, 0.18);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 15px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ==========================================================
+       Input Styling
+       ========================================================== */
+    input {
+      width: 85%;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 17px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.55);
+      text-align: center;
+      transition: 0.25s;
     }
 
     input:focus {
-      border-color: #ffffff;
-      box-shadow: 0 0 6px #fff;
+      outline: none;
+      border-color: white;
+      box-shadow: 0 0 8px white;
     }
 
-    /* --------------------------------------------------------
-       CALCULATOR BUTTON DESIGN
-       Each button has its own identifying color. Buttons grow
-       slightly on hover for a more interactive feel.
-       -------------------------------------------------------- */
+    /* ==========================================================
+       Button Styling
+       ========================================================== */
     button {
       margin: 8px;
-      padding: 10px 20px;
-      font-size: 15px;
+      padding: 12px 24px;
+      font-size: 16px;
       border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      color: white;
+      border-radius: 12px;
+      color: #fff;
       font-weight: bold;
-      transition: 0.3s ease;
+      cursor: pointer;
+      transition: 0.25s;
     }
 
-    /* Consistent color theme per operation */
+    #loginBtn {
+      background: #2196f3;
+      width: 100%;
+    }
+
+    #logoutBtn {
+      background: #ff4444;
+      width: 100%;
+      margin-top: 20px;
+    }
+
     #add {
       background: #28d17c;
     }
 
-    /* Green */
     #subtract {
       background: #ffb74d;
     }
 
-    /* Amber */
     #multiply {
       background: #7e57c2;
     }
 
-    /* Purple */
     #divide {
       background: #ef5350;
     }
 
-    /* Red */
-
     button:hover {
-      transform: scale(1.08);
-      box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+      transform: scale(1.07);
+      box-shadow: 0 0 14px rgba(255, 255, 255, 0.8);
     }
 
-    /* --------------------------------------------------------
-       RESULT DISPLAY BOX
-       Shows responses from backend. Must remain clean and free
-       of prefixes like "Result:" because Playwright expects
-       exact numeric match.
-       -------------------------------------------------------- */
+    /* ==========================================================
+       Result Box
+       ========================================================== */
     #result {
       margin-top: 20px;
-      padding: 12px;
-      min-height: 28px;
-      font-size: 20px;
-      font-weight: 700;
-      background: rgba(255, 255, 255, 0.25);
-      border-radius: 10px;
-      box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.3);
-      color: #fff;
+      padding: 14px;
+      font-size: 22px;
+      background: rgba(255, 255, 255, 0.28);
+      border-radius: 14px;
+      box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.4);
+      min-height: 32px;
     }
   </style>
 </head>
 
 <body>
 
-  <h1>FastAPI Calculator</h1>
+  <!-- ==========================================================
+       LOGIN PANEL
+       ========================================================== -->
+  <div class="card" id="loginCard">
+    <h1>Login</h1>
 
-  <div class="calculator">
-    <h2>Enter Two Numbers</h2>
+    <input type="text" id="loginUser" placeholder="Username or Email" />
+    <input type="password" id="loginPass" placeholder="Password" />
 
-    <!-- Input fields MUST keep IDs #a and #b for Playwright testing -->
-    <input type="text" id="a" placeholder="First number">
-    <input type="text" id="b" placeholder="Second number"><br>
+    <button id="loginBtn" onclick="login()">Login</button>
 
-    <!-- Button text must remain exact for Playwright -->
+    <div id="loginMsg" style="margin-top: 12px; font-size: 17px; font-weight: bold;"></div>
+  </div>
+
+  <!-- ==========================================================
+       CALCULATOR PANEL
+       ========================================================== -->
+  <div class="card fade-in" id="calcCard" style="display:none;">
+    <h1>Calculator</h1>
+
+    <input type="text" id="a" placeholder="First number" />
+    <input type="text" id="b" placeholder="Second number" />
+
     <button id="add" onclick="calculate('add')">Add</button>
     <button id="subtract" onclick="calculate('subtract')">Subtract</button>
     <button id="multiply" onclick="calculate('multiply')">Multiply</button>
     <button id="divide" onclick="calculate('divide')">Divide</button>
 
-    <!-- Output box where results or errors appear -->
     <div id="result"></div>
+
+    <button id="logoutBtn" onclick="logout()">Logout</button>
   </div>
 
+  <!-- ==========================================================
+       JAVASCRIPT LOGIC
+       ========================================================== -->
   <script>
-    /**
-     * Core function responsible for sending calculation requests
-     * to the FastAPI backend at POST /calc/compute.
-     *
-     * Operation names are lowercase to match API:
-     *   add, subtract, multiply, divide
-     *
-     * Result is placed directly as text into #result.
-     * Playwright expects EXACT numeric content (no prefix).
-     */
-    async function calculate(operation) {
-      const a = document.getElementById("a").value.trim();
-      const b = document.getElementById("b").value.trim();
-      const resultBox = document.getElementById("result");
+    /* ----------------------------------------------------------
+       LOGIN ACTION
+       ---------------------------------------------------------- */
+    async function login() {
+      const user = document.getElementById("loginUser").value.trim();
+      const pass = document.getElementById("loginPass").value.trim();
+      const msg = document.getElementById("loginMsg");
 
-      // Simple client-side validation
-      if (!a || !b) {
-        resultBox.innerText = "Error: Missing input values.";
+      if (!user || !pass) {
+        msg.innerText = "Please enter both fields.";
+        msg.style.color = "#ffcccc";
         return;
       }
 
       try {
-        const response = await fetch("/calc/compute", {
+        const res = await fetch("http://localhost:8000/auth/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: operation,        // must be lowercase
-            a: parseFloat(a),
-            b: parseFloat(b)
-          })
+          body: JSON.stringify({ username: user, password: pass })
         });
 
-        // Parse server response
-        const data = await response.json();
+        const data = await res.json();
 
-        // Success case
-        if (response.ok && data.result !== undefined) {
-          resultBox.innerText = data.result; // MUST be only number
-        }
-        else {
-          // Server returned a validation or computation error
-          resultBox.innerText = "Error: " + (data.detail || "Invalid input");
+        if (res.ok) {
+          msg.innerText = "Login successful!";
+          msg.style.color = "#00ff99";
+
+          document.getElementById("loginCard").classList.add("success-glow");
+          localStorage.setItem("token", data.access_token);
+
+          setTimeout(() => {
+            document.getElementById("loginCard").classList.add("fade-out");
+            setTimeout(() => {
+              document.getElementById("loginCard").style.display = "none";
+              document.getElementById("calcCard").style.display = "block";
+              document.getElementById("calcCard").classList.add("fade-in");
+            }, 500);
+          }, 600);
+
+        } else {
+          msg.innerText = data.detail || "Login failed";
+          msg.style.color = "#ff5555";
         }
 
       } catch (err) {
-        // Network / backend not reachable
-        resultBox.innerText = "Server error";
+        msg.innerText = "Server error";
+        msg.style.color = "#ff5555";
+      }
+    }
+
+    /* ----------------------------------------------------------
+       LOGOUT ACTION (Updated with Message)
+       ---------------------------------------------------------- */
+    function logout() {
+      localStorage.removeItem("token");
+
+      const msg = document.getElementById("loginMsg");
+      msg.innerText = "You’ve been logged out. See you next time! 👋";
+      msg.style.color = "#ffdd88";
+
+      // Fade out calculator
+      document.getElementById("calcCard").classList.add("fade-out");
+
+      setTimeout(() => {
+        document.getElementById("calcCard").style.display = "none";
+        document.getElementById("loginCard").style.display = "block";
+        document.getElementById("loginCard").classList.add("fade-in");
+
+        // Clear logout message after delay
+        setTimeout(() => {
+          msg.innerText = "";
+        }, 3000);
+
+      }, 500);
+    }
+
+    /* ----------------------------------------------------------
+       CALCULATOR ACTIONS
+       ---------------------------------------------------------- */
+    async function calculate(operation) {
+      const token = localStorage.getItem("token");
+      const a = document.getElementById("a").value.trim();
+      const b = document.getElementById("b").value.trim();
+      const resultBox = document.getElementById("result");
+
+      if (!a || !b) {
+        resultBox.innerText = "Result: Missing inputs.";
+        return;
+      }
+
+      try {
+        const res = await fetch("http://localhost:8000/calc/compute", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+          },
+          body: JSON.stringify({ type: operation, a: Number(a), b: Number(b) })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          resultBox.innerText = "Result: " + data.result;
+        } else {
+          let error = data.detail || data.error || "Error";
+
+          if (error.toLowerCase().includes("zero")) {
+            error = "Cannot divide by zero";
+          }
+
+          resultBox.innerText = "Result: " + error;
+        }
+
+      } catch {
+        resultBox.innerText = "Result: Server error.";
       }
     }
   </script>

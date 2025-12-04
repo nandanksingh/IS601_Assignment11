@@ -1,27 +1,26 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/17/2025
-# Assignment-11: Calculator API Schemas (Final)
+# Assignment-11: Calculator Schemas 
 # File: app/schemas/cal_schemas.py
 # ----------------------------------------------------------
 # Description:
-#   Schemas required by professor test suite.
+#   Defines Pydantic schemas for:
+#     • Request payload for /calc/compute
+#     • Response schema for API
+#     • Internal schemas for DB operations
 #
-#   MUST support:
-#      • /calc/compute          → CalculationCompute
-#      • Only returns { result }
-#      • No user_id required for compute route
-#
-#   Additional schemas kept minimal to satisfy:
-#      • test_cal_model.py
-#      • test_calculation_factory.py
+# Fixes:
+#   • Added compute_result() logic in CalculationCreate
+#   • Added validation for supported types and zero division
+#   • CalculationRead now includes id, type, a, b, result, user_id
 # ----------------------------------------------------------
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional
 
 
 # ==========================================================
-# 1) Schema used by POST /calc/compute
+# 1) Request schema for POST /calc/compute
 # ==========================================================
 class CalculationCompute(BaseModel):
     type: str = Field(..., description="Operation type: add/subtract/multiply/divide")
@@ -33,32 +32,60 @@ class CalculationCompute(BaseModel):
 # 2) Response schema returned by API
 # ==========================================================
 class CalculationRead(BaseModel):
-    result: float
-
-
-# ==========================================================
-# 3) Schema used INTERNALLY in tests (DB creation)
-# ----------------------------------------------------------
-
-class CalculationCreate(BaseModel):
+    id: Optional[int] = None
     type: str
     a: float
     b: float
     result: float
-    user_id: int | None = None
-
-    model_config = {"from_attributes": True}
+    user_id: Optional[int] = None
 
 
 # ==========================================================
-# 4) Schema used for ORM → Schema conversion
-# ----------------------------------------------------------
+# 3) Schema used for DB creation in tests
+# ==========================================================
+class CalculationCreate(BaseModel):
+    type: str
+    a: float
+    b: float
+    result: Optional[float] = None
+    user_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def compute_and_validate(cls, values):
+        op_type = values.type.lower()
+        a, b = values.a, values.b
+
+        if op_type not in {"add", "subtract", "multiply", "divide"}:
+            raise ValueError("Unsupported calculation type")
+
+        if op_type == "divide" and b == 0:
+            raise ValueError("Division by zero is not allowed")
+
+        # Compute result
+        if op_type == "add":
+            values.result = a + b
+        elif op_type == "subtract":
+            values.result = a - b
+        elif op_type == "multiply":
+            values.result = a * b
+        elif op_type == "divide":
+            values.result = a / b
+
+        return values
+
+    def compute_result(self) -> float:
+        return self.result
+
+
+# ==========================================================
+# 4) Schema for ORM → Schema conversion
+# ==========================================================
 class CalculationDBRead(BaseModel):
     id: int
     type: str
     a: float
     b: float
     result: float
-    user_id: int | None
+    user_id: Optional[int]
 
     model_config = {"from_attributes": True}

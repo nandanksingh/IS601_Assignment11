@@ -1,18 +1,19 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/18/2025
-# Assignment-11: Authentication Security Tests (FINAL)
+# Date: 12/03/2025
+# Assignment-11: Authentication Security Tests (Final)
 # File: tests/integration/test_auth_security.py
 # ----------------------------------------------------------
 # Description:
 #   • Integration tests for password hashing and JWT utilities
-#   • Validates hash/verify functions and token encode/decode
 #   • Covers edge cases and monkeypatched failures
+#   • Ensures 100% coverage for app/auth/security.py and dependencies.py
 # ----------------------------------------------------------
 
 import time
 import pytest
 import jwt
+from sqlalchemy.orm import Session
 
 from app.auth.security import (
     hash_password,
@@ -21,7 +22,15 @@ from app.auth.security import (
     create_access_token,
     decode_access_token,
 )
-from app.auth.dependencies import SECRET_KEY, ALGORITHM
+from app.auth.dependencies import (
+    SECRET_KEY,
+    ALGORITHM,
+    get_current_user,
+    create_access_token as dep_create_token,
+)
+from app.database.dbase import SessionLocal
+from app.models.user_model import User
+
 
 # ----------------------------------------------------------
 # Password Hashing
@@ -36,15 +45,27 @@ def test_password_hashing_and_verification():
     assert verify_password_hash(raw, hashed) is True
     assert verify_password_hash("WrongPassword", hashed) is False
 
+
 def test_hash_password_invalid_input():
     with pytest.raises(ValueError):
         hash_password("")  # empty string
     with pytest.raises(ValueError):
         hash_password(123)  # non-string
 
+
 def test_verify_password_invalid_inputs():
     assert verify_password(123, "hash") is False
     assert verify_password("plain", None) is False
+
+
+# ----------------------------------------------------------
+# Force hashing failure for coverage
+# ----------------------------------------------------------
+def test_hash_password_runtime_error(monkeypatch):
+    monkeypatch.setattr("app.auth.security.pwd_context.hash", lambda *a, **k: (_ for _ in ()).throw(Exception("boom")))
+    with pytest.raises(RuntimeError):
+        hash_password("validpassword")
+
 
 # ----------------------------------------------------------
 # Token Creation + Decoding
@@ -56,10 +77,12 @@ def test_jwt_create_and_decode():
     assert decoded["sub"] == "123"
     assert "exp" in decoded
 
+
 def test_create_access_token_failure(monkeypatch):
     monkeypatch.setattr("jwt.encode", lambda *a, **k: (_ for _ in ()).throw(Exception("fail")))
     with pytest.raises(RuntimeError):
         create_access_token({"sub": "x"})
+
 
 # ----------------------------------------------------------
 # Invalid Token
@@ -68,6 +91,7 @@ def test_invalid_token_rejected():
     invalid_token = "this.is.not.valid"
     with pytest.raises(RuntimeError):
         decode_access_token(invalid_token)
+
 
 # ----------------------------------------------------------
 # Expired Token
@@ -78,13 +102,26 @@ def test_expired_token_rejected():
     with pytest.raises(RuntimeError):
         decode_access_token(token)
 
+
 # ----------------------------------------------------------
-# Generic Decode Failure
+# Generic Decode Failure (monkeypatch)
 # ----------------------------------------------------------
 def test_decode_access_token_generic_failure(monkeypatch):
     monkeypatch.setattr("jwt.decode", lambda *a, **k: (_ for _ in ()).throw(Exception("boom")))
     with pytest.raises(RuntimeError):
         decode_access_token("dummy")
+
+
+# ----------------------------------------------------------
+# Additional coverage: unexpected decode error
+# ----------------------------------------------------------
+def test_decode_access_token_unexpected_error(monkeypatch):
+    def raise_generic(*a, **k):
+        raise Exception("unexpected failure")
+    monkeypatch.setattr("jwt.decode", raise_generic)
+    with pytest.raises(RuntimeError):
+        decode_access_token("dummy-token")
+
 
 # ----------------------------------------------------------
 # Missing 'sub' Field
@@ -93,6 +130,7 @@ def test_token_missing_sub_field():
     token = create_access_token({"foo": "bar"})
     decoded = decode_access_token(token)
     assert decoded.get("sub") is None
+
 
 # ----------------------------------------------------------
 # Custom Claim Integrity
@@ -103,3 +141,28 @@ def test_custom_claim_persists():
     decoded = decode_access_token(token)
     assert decoded["role"] == "admin"
     assert decoded["sub"] == "7"
+
+
+# ----------------------------------------------------------
+# Coverage for get_current_user success path
+# ----------------------------------------------------------
+def test_get_current_user_success():
+    db: Session = SessionLocal()
+    user = User(
+        first_name="Test",
+        last_name="User",
+        username="testuser",
+        email="test@example.com",
+        is_active=True,
+    )
+    user.set_password("pass123")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = dep_create_token({"sub": str(user.id)})
+    result = get_current_user(token, db)
+    assert result.id == user.id
+    assert result.username == "testuser"
+
+    db.close()

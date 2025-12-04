@@ -1,18 +1,14 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
 # Date: 11/18/2025
-# Assignment-11: User Schema Tests
+# Assignment-11: User Schema Tests (UPDATED for new rules)
 # File: tests/integration/test_user_schema.py
 # ----------------------------------------------------------
 # Description:
-# Tests Pydantic user schemas:
-#   • UserCreate (registration)
-#   • UserLogin
-#   • UserRead
-#   • UserResponse
-#   • Email + password validation rules
-#   • ORM → Pydantic validation for read-safe models
-# Uses Pydantic v2 ValidationError.
+# Updated tests for simplified User schemas:
+#   • No first_name / last_name fields
+#   • Username: alphanumeric, length 4–10
+#   • Password: 6–20 chars (must contain upper/lower/digit)
 # ----------------------------------------------------------
 
 import pytest
@@ -31,16 +27,12 @@ from app.schemas.user_schema import (
 # ----------------------------------------------------------
 def test_user_create_valid():
     schema = UserCreate(
-        first_name="Nandan",
-        last_name="Kumar",
-        username="nandan123",
+        username="nk123",
         email="nandan@example.com",
         password="Strong123"
     )
 
-    assert schema.first_name == "Nandan"
-    assert schema.last_name == "Kumar"
-    assert schema.username == "nandan123"
+    assert schema.username == "nk123"
     assert schema.email == "nandan@example.com"
 
 
@@ -59,9 +51,7 @@ def test_user_create_valid():
 def test_user_create_invalid_password(password):
     with pytest.raises(ValidationError):
         UserCreate(
-            first_name="Nandan",
-            last_name="Kumar",
-            username="testuser",
+            username="nk123",
             email="test@example.com",
             password=password
         )
@@ -73,8 +63,6 @@ def test_user_create_invalid_password(password):
 def test_user_create_invalid_email():
     with pytest.raises(ValidationError):
         UserCreate(
-            first_name="A",
-            last_name="B",
             username="user1",
             email="not-an-email",
             password="Strong123"
@@ -93,7 +81,7 @@ def test_user_login_valid():
 
 
 # ----------------------------------------------------------
-# UserLogin — Invalid username
+# UserLogin — Invalid username (too short)
 # ----------------------------------------------------------
 def test_user_login_invalid_username():
     with pytest.raises(ValidationError):
@@ -104,23 +92,21 @@ def test_user_login_invalid_username():
 
 
 # ----------------------------------------------------------
-# UserRead — ORM conversion (UPDATED)
+# UserRead — ORM conversion
 # ----------------------------------------------------------
 def test_user_read_schema():
     now = datetime.utcnow()
     schema = UserRead(
         id=1,
-        first_name="Nandan",
-        last_name="Kumar",
         username="nk123",
         email="nk@example.com",
-        is_active=True,          # ✅ FIX ADDED — REQUIRED FIELD
+        is_active=True,
         created_at=now,
         updated_at=now
     )
 
     assert schema.id == 1
-    assert schema.first_name == "Nandan"
+    assert schema.username == "nk123"
     assert schema.email == "nk@example.com"
     assert schema.created_at == now
 
@@ -132,9 +118,7 @@ def test_user_response_schema():
     now = datetime.utcnow()
     schema = UserResponse(
         id=5,
-        first_name="A",
-        last_name="B",
-        username="alpha",
+        username="alpha1",
         email="test@example.com",
         is_active=True,
         created_at=now,
@@ -142,5 +126,5 @@ def test_user_response_schema():
     )
 
     assert schema.id == 5
-    assert schema.username == "alpha"
+    assert schema.username == "alpha1"
     assert schema.is_active is True

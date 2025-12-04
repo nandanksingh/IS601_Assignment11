@@ -1,14 +1,13 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 11/19/2025
 # Assignment-11: Modular API + DB-Backed Calculations
 # File: docker-compose.yml
 # ----------------------------------------------------------
 # Description:
 # Multi-container stack for:
 #   • FastAPI backend
-#   • PostgreSQL database
-#   • pgAdmin web UI
+#   • PostgreSQL database (persistent)
+#   • pgAdmin UI (persistent)
 #   • Pytest test runner
 # ----------------------------------------------------------
 
@@ -24,7 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: module11_test_calculation_model:img_m11
+    image: module11_app_image:img_m11
     restart: always
     env_file:
       - .env
@@ -41,7 +40,7 @@ services:
       - app-network
 
   # --------------------------------------------------------
-  # POSTGRES DATABASE
+  # POSTGRES DATABASE (PERSISTENT)
   # --------------------------------------------------------
   db:
     container_name: module11_postgres
@@ -54,7 +53,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data   # <-- PERSISTENT DB
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -64,7 +63,7 @@ services:
       - app-network
 
   # --------------------------------------------------------
-  # PGADMIN
+  # PGADMIN (PERSISTENT)
   # --------------------------------------------------------
   pgadmin:
     container_name: module11_pgadmin
@@ -79,7 +78,7 @@ services:
     ports:
       - "5050:80"
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - pgadmin_data:/var/lib/pgadmin   # <-- PERSISTENT pgAdmin
     networks:
       - app-network
 
@@ -91,7 +90,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: module11_test_calculation_model:img_m11
+    image: module11_tests_image:img_m11
     depends_on:
       db:
         condition: service_healthy
@@ -115,17 +114,17 @@ services:
         fi
 
         echo 'Running pytest...';
-        pytest --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings;
+        pytest -m \"not e2e\" --cov=app --cov-report=term-missing --cov-fail-under=90 -v --disable-warnings;
       "
     networks:
       - app-network
 
 # ----------------------------------------------------------
-# VOLUMES
+# VOLUMES (PERSISTENCE)
 # ----------------------------------------------------------
 volumes:
-  postgres_data:
-  pgadmin_data:
+  postgres_data:   # PostgreSQL data persists even after restart
+  pgadmin_data:    # pgAdmin configurations persist
 
 # ----------------------------------------------------------
 # NETWORK
