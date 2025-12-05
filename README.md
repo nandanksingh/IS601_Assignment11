@@ -1,113 +1,82 @@
 # **Assignment 11 – Calculation Model, Factory Pattern, and Database Integration**
 
 **Author:** Nandan Kumar
-**Date:** November 17, 2025
 
 ---
 
 ## **Introduction**
 
-In this assignment, I expanded my FastAPI application by implementing a fully validated **Calculation Model** using SQLAlchemy, defining **Pydantic schemas**, and introducing an optional **Factory Pattern** to handle different arithmetic operations. I also extended my CI/CD workflow to incorporate new unit tests, integration tests, and database-backed validation using PostgreSQL inside GitHub Actions.
+In this assignment, I expanded my FastAPI application into a fully structured backend system by implementing a validated **Calculation Model** using SQLAlchemy, creating strong **Pydantic schemas** for data validation, and optionally integrating a **Factory Pattern** to manage arithmetic operations cleanly and extensibly. These updates ensured that every calculation request is validated, processed correctly, and stored reliably in the database.
 
-This assignment strengthened my understanding of data modeling, validation workflows, and DevOps practices by ensuring that every calculation operation is tested, validated, stored, and deployable using Docker and automated pipelines.
+The system also includes **JWT-based authentication**, enabling secure user login and interaction with a styled HTML calculator interface. This made the application fully interactive, allowing authenticated users to perform operations through a browser UI.
 
----
-
-## **Project Structure and Tools**
-
-The project includes four core components:
-
-| Component       | Purpose                                 |
-| --------------- | --------------------------------------- |
-| **app/models**  | SQLAlchemy Calculation & User models    |
-| **app/schemas** | Pydantic schemas for validation         |
-| **app/factory** | Factory Pattern for operation selection |
-| **tests/**      | Full unit + integration + E2E tests     |
-
-Main technologies used:
-
-* **FastAPI** – API framework
-* **SQLAlchemy ORM** – Database modeling
-* **Pydantic v2** – Input/output validation
-* **Docker + Docker Compose** – Containerization
-* **GitHub Actions** – Automated CI/CD
-* **PostgreSQL + pgAdmin** – Database services
-* **Trivy** – Docker image vulnerability scanning
-* **pytest + pytest-cov** – Automated tests & coverage
+Beyond feature development, I strengthened the entire DevOps workflow by adding **unit and integration tests**, achieving **96.21% test coverage**, and configuring GitHub Actions to run PostgreSQL-backed tests, perform Trivy security scans, and automatically deploy Docker images to Docker Hub. This assignment significantly improved my understanding of backend engineering, validation workflows, CI/CD, containerization, and real-world system reliability.
 
 ---
 
-## **Running the Project with Docker**
+## **Project Architecture & Structure:**
 
-Start all services:
+### **Component Overview**
 
-```bash
-docker compose up --build
-```
-
-Access:
-
-* FastAPI — [http://localhost:8000](http://localhost:8000)
-* pgAdmin — [http://localhost:5050](http://localhost:5050)
-
-Stop:
-
-```bash
-docker compose down
-```
-
----
-
-## **CI/CD Pipeline (GitHub Actions)**
-
-My GitHub Actions workflow runs in **three stages**:
-
-### **1. Test Stage**
-
-* Runs all unit, integration, and calculation model tests
-* Starts PostgreSQL inside GitHub Actions
-* Enforces **≥ 90% code coverage**
-
-### **2. Security Scan**
-
-* Builds project Docker image
-* Scans using **Trivy**
-* Fails pipeline if high/critical vulnerabilities are found
-
-### **3. Deployment Stage**
-
-* Pushes final verified Docker image to Docker Hub
-* Ensures only secure and tested builds are deployed
-
-Run tests locally:
-
-```bash
-pytest --cov=app -v
-```
+| Category / Component | Technology / Location   | Purpose                                             |
+| -------------------- | ----------------------- | --------------------------------------------------- |
+| Frontend UI          | HTML + CSS + JavaScript | Login page and interactive calculator interface     |
+| FastAPI Backend      | Python (FastAPI)        | Routing, authentication, calculation logic          |
+| Auth Module          | JWT Tokens + Passlib    | User registration, login, hashing, token validation |
+| Database             | PostgreSQL              | Stores users and calculation records                |
+| pgAdmin              | dpage/pgadmin4          | Web interface for DB inspection                     |
+| SQLAlchemy Models    | `app/models`            | User & Calculation ORM models                       |
+| Pydantic Schemas     | `app/schemas`           | Validates input and structures API responses        |
+| Factory Pattern      | `app/factory`           | Selects correct Add/Sub/Mul/Div logic               |
+| Testing Suite        | Pytest + `tests/`       | Unit + integration tests (96.21% coverage)          |
+| Containerization     | Docker + Docker Compose | Runs entire application stack                       |
+| CI/CD Pipeline       | GitHub Actions          | Automated tests → scan → Docker Hub deploy          |
+| Deployment Registry  | Docker Hub              | Stores production-ready Docker images               |
 
 ---
 
-## **Docker Hub Deployment**
+## **Docker Compose Services**
 
-Module 11 image is published on Docker Hub:
-
-[https://hub.docker.com/r/nandanksingh/module11_test_calculation_model](https://hub.docker.com/r/nandanksingh/module11_test_calculation_model)
-
-Pull:
-
-```bash
-docker pull nandanksingh/module11_test_calculation_model:M11
-```
-
-Run:
-
-```bash
-docker run -d -p 8000:8000 nandanksingh/module11_test_calculation_model:M11
-```
+| Service | Purpose                                | Port |
+| ------- | -------------------------------------- | ---- |
+| app     | FastAPI backend with auth + calculator | 8000 |
+| db      | PostgreSQL database                    | 5432 |
+| pgadmin | GUI for DB management                  | 5050 |
+| tests   | Test runner container                  | N/A  |
 
 ---
 
-## **Local Setup (Without Docker)**
+## **How Authentication Works**
+
+1. Register:
+   **POST /auth/auth/register**
+2. Password is hashed using Passlib.
+3. Login:
+   **POST /auth/auth/login**
+4. Server returns a signed JWT token.
+5. User includes token in Authorization headers.
+6. FastAPI validates the token and identifies the logged-in user.
+
+Registration URL (interactive):
+[http://localhost:8000/docs#/Authentication/register_user_auth_auth_register_post](http://localhost:8000/docs#/Authentication/register_user_auth_auth_register_post)
+
+This ensures only authenticated users can perform calculations.
+
+---
+
+## **API Route Documentation**
+
+| Method | Route               | Description                                |
+| ------ | ------------------- | ------------------------------------------ |
+| POST   | /auth/auth/register | Register a new user                        |
+| POST   | /auth/auth/login    | Login and receive a JWT token              |
+| POST   | /calc/compute       | Perform a calculation using a, b, and type |
+| GET    | /health             | Health check endpoint                      |
+| GET    | /                   | Load the calculator HTML interface         |
+
+---
+
+## **Running Tests Locally (96.21% Coverage)**
 
 ```bash
 git clone https://github.com/nandanksingh/IS601_Assignment11.git
@@ -115,50 +84,117 @@ cd IS601_Assignment11
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+pytest --cov=app -v
+```
+
+---
+
+## **Running the Application Without Docker**
+
+```bash
 uvicorn main:app --reload
 ```
 
-Docs:
+Open API docs:
 [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-## **Key Features Implemented**
+## **Running the Project with Docker**
 
-* SQLAlchemy **Calculation Model** with polymorphic behavior
-* Optional **Factory Pattern** for Add/Subtract/Multiply/Divide
-* Pydantic **CalculationCreate** and **CalculationRead** schemas
-* Validation for operation type, zero division, numeric inputs
-* Database-backed integration tests (PostgreSQL)
-* SQLite fallback for pytest
-* Complete CI/CD pipeline with coverage + Trivy scanning
-* Docker image ready for deployment
+### Start all services
+
+```bash
+docker compose up --build
+```
+
+### Access the services
+
+| Service     | URL                                                      |
+| ----------- | -------------------------------------------------------- |
+| FastAPI App | [http://localhost:8000](http://localhost:8000)           |
+| API Docs    | [http://localhost:8000/docs](http://localhost:8000/docs) |
+| pgAdmin     | [http://localhost:5050](http://localhost:5050)           |
+
+### Stop services
+
+```bash
+docker compose down
+```
+
+---
+
+## **Docker Hub Repository**
+
+Production image:
+**[https://hub.docker.com/r/nandanksingh/module11_test_calculation_model](https://hub.docker.com/r/nandanksingh/module11_test_calculation_model)**
+
+Pull:
+
+```bash
+docker pull nandanksingh/module11_test_calculation_model:img_m11
+```
+
+Run:
+
+```bash
+docker run -d -p 8000:8000 nandanksingh/module11_test_calculation_model:img_m11
+```
+
+---
+
+## **CI/CD Pipeline Overview**
+
+### Test Stage
+
+* Runs unit + integration tests
+* Starts PostgreSQL in GitHub Actions
+* Enforces **90% minimum coverage**
+
+### Security Scan
+
+* Builds Docker image
+* Performs **Trivy vulnerability scan**
+
+### Deployment
+
+* Uses environment-level secrets
+* Builds & pushes image to Docker Hub with Buildx
+* Verifies image by pulling after deployment
+
+This ensures secure, reliable, production-ready deployment.
 
 ---
 
 ## **Common Problems and Fixes**
 
-| Problem              | Reason                     | Fix                            |
-| -------------------- | -------------------------- | ------------------------------ |
-| Incorrect DB URL     | Wrong `.env` configuration | Updated env variables          |
-| Polymorphic errors   | Wrong model base config    | Added correct SQLAlchemy setup |
-| Failing tests        | Old DB schema cached       | Full reset in conftest         |
-| GitHub Actions crash | DB not ready               | Added `service_healthy` check  |
-| Coverage drop        | Missing negative tests     | Added complete error branches  |
+| Problem Encountered               | Root Cause                          | Fix                                             |
+| --------------------------------- | ----------------------------------- | ----------------------------------------------- |
+| Database error in `/calc/compute` | Wrong DB URL or session handling    | Corrected DB config and session lifecycle       |
+| Login failed with correct creds   | Wrong route or JWT dependency error | Fixed router path + added proper JWT validation |
+| UI always showed “Database error” | Wrong API URLs or missing token     | Updated JS fetch URLs and Authorization header  |
+| PostgreSQL not ready in CI        | DB not healthy yet                  | Added `pg_isready` loop                         |
+| Old import paths failing          | Previous module structure leftover  | Updated to correct `dbase.py` imports           |
+| Coverage low at 42%               | Missing auth and model tests        | Added full authentication and schema tests      |
+| Docker image not pushing          | Wrong repo or missing secrets       | Corrected image name + added env-level secrets  |
+| Trivy scan failing                | Inconsistent image tag              | Used consistent `img_m11` tag                   |
 
 ---
 
-## **Reflection **
+## **Reflection**
 
-This assignment deepened my understanding of how data modeling, validation, and backend architecture work together in a production-quality system. Designing the SQLAlchemy Calculation model helped me explore polymorphic inheritance and how different calculation types can share common structures while maintaining their own behaviors. Implementing the Factory Pattern also showed me how design patterns contribute to cleaner, extensible code, especially when an application needs to support multiple operations consistently.
+This assignment pushed me to understand how a complete backend system behaves when all components—FastAPI routes, authentication logic, SQLAlchemy models, Pydantic validation, Docker containers, and GitHub Actions—must work together seamlessly. The most challenging part was getting the FastAPI calculator with user login running correctly inside Docker. At first, the `/auth/auth/login` route failed despite correct credentials, and every call to `/calc/compute` returned database errors. Debugging this required tracing JavaScript requests, validating JWT tokens, and ensuring the backend could reach PostgreSQL inside the container.
 
-Creating Pydantic schemas reinforced the importance of strict input validation before storing data. I realized how essential schema design is for preventing runtime errors, enforcing constraints, and improving API reliability. The testing portion—unit, integration, and database-backed tests—helped me adopt a more disciplined approach to validating backend logic.
+Building the Calculation model and schemas showed me how crucial validation is in preventing runtime errors. Achieving **96.21% test coverage** required adding strong unit and integration tests for authentication, models, and calculations.
 
-Updating the CI/CD pipeline to incorporate the new model, test environment, coverage rules, and Trivy scanning allowed me to see how DevOps principles ensure quality and security before deployment. Overall, this assignment strengthened my skills in backend engineering, database integration, test automation, and secure development practices. It also prepared me for Module 12, where I will expose the Calculation model through real API endpoints.
+The CI/CD pipeline was another major learning experience. Setting up Docker Hub authentication, configuring environment-level secrets, enabling Buildx, and deploying images took several iterations. These challenges improved my debugging skills and taught me how real DevOps workflows operate.
 
 ---
 
-## **Final Summary**
+## **Conclusion**
 
-Assignment 11 brought together **database modeling, validation, design patterns, testing, Docker, and CI/CD automation**. It lays the complete foundation for creating fully functional calculation endpoints in the next module.
+Assignment 11 combined everything learned so far—data modeling, authentication, validation, testing, Docker, and CI/CD—into a cohesive backend system. Solving routing issues, database errors, and deployment challenges helped me understand how real backend systems behave under production-like conditions. Automated testing ensured consistent reliability, and the CI/CD pipeline demonstrated how professional systems manage secure deployments. This module significantly strengthened my skills in backend engineering, DevOps, and building production-ready applications.
 
+---
+
+If you want, I can convert this into a **PDF template**, **Canvas submission format**, or a **shortened README version** as well.
