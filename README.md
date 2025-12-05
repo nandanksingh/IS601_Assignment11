@@ -196,5 +196,3 @@ The CI/CD pipeline was another major learning experience. Setting up Docker Hub 
 Assignment 11 combined everything learned so far—data modeling, authentication, validation, testing, Docker, and CI/CD—into a cohesive backend system. Solving routing issues, database errors, and deployment challenges helped me understand how real backend systems behave under production-like conditions. Automated testing ensured consistent reliability, and the CI/CD pipeline demonstrated how professional systems manage secure deployments. This module significantly strengthened my skills in backend engineering, DevOps, and building production-ready applications.
 
 ---
-
-If you want, I can convert this into a **PDF template**, **Canvas submission format**, or a **shortened README version** as well.
